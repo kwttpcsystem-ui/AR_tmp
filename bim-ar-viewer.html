@@ -1,0 +1,4945 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>BIM AR Viewer</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #model-name-label {
+      display: none;
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 10;
+      color: #fff;
+      font-size: 18px;
+      font-weight: bold;
+      background: rgba(0,0,0,0.55);
+      padding: 8px 14px;
+      border-radius: 8px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+      max-width: 70vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #file-picker {
+      position: fixed;
+      top: 12px;
+      bottom: 90px;
+      left: 12px;
+      right: 12px;
+      z-index: 10;
+      text-align: center;
+      overflow-y: auto;
+    }
+    #file-label {
+      display: inline-block;
+      background: #2196f3;
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    #model-input {
+      display: none;
+    }
+    #right-group {
+      display: none;
+      position: fixed;
+      right: 14px;
+      bottom: 14px;
+      z-index: 20;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+      transition: transform 0.2s ease;
+    }
+    #right-group.collapsed {
+      transform: translateX(calc(100% + 20px));
+      pointer-events: none;
+    }
+    #ar-controls {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+      pointer-events: none;
+    }
+    #ar-controls button {
+      pointer-events: auto;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border-radius: 8px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
+      touch-action: none;
+      user-select: none;
+    }
+    #ar-controls button:active {
+      background: rgba(33,150,243,0.9);
+    }
+    .ctrl-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ctrl-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .ctrl-group span {
+      color: #ccc;
+      font-size: 11px;
+      width: 32px;
+      text-align: right;
+    }
+    #top-right-buttons {
+      display: none;
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 20;
+      flex-direction: row-reverse;
+      gap: 8px;
+    }
+    #reset-button {
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    #right-group-tab {
+      background: rgba(30,30,30,0.85);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    /* 縦画面(片手持ち)用のレイアウト調整 */
+    @media (orientation: portrait) {
+      #model-name-label { font-size: 13px; padding: 6px 10px; max-width: calc(100vw - 210px); }
+      #orientation-align-banner { top: 190px; max-width: 92vw; }
+      #ps-banner { top: 64px; max-width: 92vw; font-size: 12px; padding: 8px 12px; }
+      #slider-panel { width: 150px; }
+      #cv-list-panel { width: 82vw; }
+    }
+    #opacity-control {
+      display: none;
+      position: fixed;
+      left: 14px;
+      bottom: 14px;
+      z-index: 20;
+      align-items: flex-end;
+      gap: 8px;
+      transition: transform 0.2s ease;
+    }
+    #opacity-control.collapsed {
+      transform: translateX(calc(-100% - 20px));
+      pointer-events: none;
+    }
+    #left-group-tab {
+      display: none;
+      position: fixed;
+      left: 0;
+      bottom: 40px;
+      z-index: 21;
+      background: rgba(30,30,30,0.85);
+      color: #fff;
+      border: none;
+      border-radius: 0 6px 6px 0;
+      padding: 14px 6px;
+      font-size: 11px;
+      writing-mode: vertical-rl;
+    }
+    #slider-panel {
+      background: rgba(30,30,30,0.8);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #fff;
+      width: 195px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #slider-panel .label {
+      font-size: 10px;
+      color: #ccc;
+      margin-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+    }
+    #slider-panel input[type="range"] {
+      width: 100%;
+    }
+    #grid-panel-divider {
+      border-top: 0.5px solid rgba(255,255,255,0.25);
+      margin: 2px 0;
+    }
+    #grid-toggle-row {
+      display: flex;
+      gap: 8px;
+    }
+    .grid-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid rgba(255,255,255,0.35);
+      color: #ccc;
+      background: transparent;
+    }
+    .grid-chip.checked {
+      background: #2979ff;
+      border-color: #2979ff;
+      color: #fff;
+    }
+    .grid-chip-check {
+      font-style: normal;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .reset-tap {
+      cursor: pointer;
+      text-decoration: underline dotted;
+    }
+    #btn-rot-90 {
+      width: 106px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      font-size: 12px;
+      padding: 0 6px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      touch-action: none;
+      user-select: none;
+    }
+    #btn-rot-90:active {
+      background: rgba(33,150,243,0.9);
+    }
+    #orientation-align-button {
+      width: 106px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      font-size: 11px;
+      padding: 0 4px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      touch-action: none;
+      user-select: none;
+    }
+    #orientation-align-button.active {
+      background: #ff9800;
+    }
+    #point-align-button {
+      width: 220px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      font-size: 12px;
+      touch-action: none;
+      user-select: none;
+    }
+    #point-align-button.active {
+      background: #ff9800;
+    }
+    #bim-viewer-open-button {
+      width: 220px;
+      height: 36px;
+      border-radius: 8px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      font-size: 12px;
+      touch-action: none;
+      user-select: none;
+    }
+    #point-align-button:disabled,
+    #position-toggle-button:disabled,
+    #orientation-align-button:disabled {
+      opacity: 0.5;
+    }
+    #orientation-align-banner {
+      display: none;
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 22;
+      background: rgba(255,152,0,0.9);
+      color: #000;
+      font-weight: bold;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 11px;
+      line-height: 1.4;
+      text-align: center;
+      max-width: 70vw;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .orientation-align-marker {
+      display: none;
+      position: fixed;
+      z-index: 21;
+      width: 16px;
+      height: 16px;
+      margin-left: -8px;
+      margin-top: -8px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      pointer-events: none;
+    }
+    .orientation-align-marker.marker-yellow {
+      background: #ffeb3b;
+    }
+    .orientation-align-marker.marker-green {
+      background: #4caf50;
+    }
+    #oa-crosshair {
+      display: none;
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 21;
+      width: 40px;
+      height: 40px;
+      pointer-events: none;
+    }
+    #oa-crosshair .oa-crosshair-h,
+    #oa-crosshair .oa-crosshair-v {
+      position: absolute;
+      background: #ffeb3b;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.6);
+    }
+    #oa-crosshair .oa-crosshair-h {
+      left: 0;
+      top: 50%;
+      width: 100%;
+      height: 2px;
+      margin-top: -1px;
+    }
+    #oa-crosshair .oa-crosshair-v {
+      top: 0;
+      left: 50%;
+      width: 2px;
+      height: 100%;
+      margin-left: -1px;
+    }
+    #oa-crosshair.hit .oa-crosshair-h,
+    #oa-crosshair.hit .oa-crosshair-v {
+      background: #4caf50;
+    }
+    #oa-confirm-point-button {
+      display: none;
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      z-index: 22;
+      background: #2979ff;
+      color: #fff;
+      border: none;
+      border-radius: 24px;
+      padding: 12px 36px;
+      font-size: 15px;
+      font-weight: bold;
+    }
+    #oa-confirm-point-button:disabled {
+      background: #555;
+      opacity: 0.6;
+    }
+    #oa-confirm-panel {
+      display: none;
+      position: fixed;
+      left: 50%;
+      bottom: 16px;
+      transform: translateX(-50%);
+      z-index: 23;
+      background: rgba(20,20,20,0.94);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      padding: 12px 18px;
+      text-align: center;
+      max-width: 90vw;
+      color: #fff;
+      font-size: 13px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #elevation-canvas-wrap {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #1a1a1a;
+      z-index: 15;
+    }
+    #elevation-canvas-wrap canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #cv-leader-svg { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; z-index: 16; pointer-events: none; display: none; }
+    #cv-list-tab {
+      display: none; position: fixed; left: 0; top: 72%; transform: translateY(-50%); z-index: 19;
+      background: rgba(30,30,30,0.9); color: #fff; border: none; border-radius: 0 10px 10px 0;
+      padding: 12px 8px; font-size: 13px; line-height: 1.3;
+    }
+    #cv-list-panel {
+      display: none; position: fixed; left: 0; top: 0; bottom: 0; width: 72vw; max-width: 380px; z-index: 20;
+      background: rgba(20,20,20,0.96); color: #fff; overflow-y: auto; padding: 10px; box-sizing: border-box;
+    }
+    #cv-list-panel h3 { margin: 4px 0 10px; font-size: 15px; }
+    .cv-item { background: rgba(255,255,255,0.08); border-radius: 8px; padding: 8px; margin-bottom: 10px; }
+    .cv-item-title { font-size: 14px; margin-bottom: 6px; }
+    .cv-item img { width: 100%; max-height: 140px; object-fit: contain; border-radius: 6px; display: block; margin-bottom: 6px; }
+    .cv-item button { border: none; border-radius: 6px; color: #fff; font-size: 12px; padding: 7px 10px; margin-right: 6px; }
+    .cv-item button.view { background: #2979ff; }
+    .cv-item button.img { background: #6a1b9a; }
+    .cv-item button:disabled { background: #555; }
+    #point-align-canvas-wrap {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #1a1a1a;
+      z-index: 15;
+      touch-action: none;
+    }
+    #point-align-canvas-wrap canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+    #elevation-banner {
+      display: none;
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 22;
+      background: rgba(255,152,0,0.95);
+      color: #000;
+      font-weight: bold;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: center;
+      max-width: 90vw;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #elevation-reference-line {
+      display: none;
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 3px;
+      margin-top: -1px;
+      background: #ff3b30;
+      z-index: 20;
+      pointer-events: none;
+    }
+    #elevation-drag-handle {
+      display: none;
+      position: fixed;
+      right: 90px;
+      top: 50%;
+      margin-top: -30px;
+      width: 40px;
+      height: 60px;
+      background: #ffeb3b;
+      border: 2px solid #fff;
+      clip-path: polygon(50% 0%, 100% 20%, 68% 20%, 68% 80%, 100% 80%, 50% 100%, 0% 80%, 32% 80%, 32% 20%, 0% 20%);
+      z-index: 21;
+      touch-action: none;
+      cursor: ns-resize;
+    }
+    #position-toggle-button {
+      display: block;
+      width: 90px;
+      background: rgba(30,30,30,0.85);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 0;
+      font-size: 12px;
+      text-align: center;
+    }
+    #position-toggle-button.active {
+      background: #2196f3;
+    }
+    #comment-pin-button {
+      display: none;
+      position: fixed;
+      left: 14px;
+      top: 60px;
+      z-index: 20;
+      background: rgba(30,30,30,0.85);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      text-align: center;
+    }
+    #comment-pin-button.active {
+      background: #ff9800;
+    }
+    #comment-labels-toggle {
+      display: none;
+      position: fixed;
+      left: 14px;
+      top: 100px;
+      z-index: 20;
+      background: rgba(30,30,30,0.85);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      text-align: center;
+    }
+    #comment-labels-toggle.active {
+      background: #2e7d32;
+    }
+    #confirm-view-button {
+      display: none;
+      position: fixed;
+      left: 14px;
+      top: 140px;
+      z-index: 20;
+      background: rgba(30,30,30,0.85);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      text-align: center;
+    }
+    #confirm-view-button.active {
+      background: #ff9800;
+    }
+    #comment-labels-container {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      pointer-events: none;
+    }
+    .comment-label {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      background: rgba(0,0,0,0.8);
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      max-width: 160px;
+      pointer-events: none;
+      text-align: center;
+    }
+    .comment-label-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .comment-label-thumb {
+      display: block;
+      max-width: 100%;
+      max-height: 70px;
+      border-radius: 4px;
+      margin-top: 4px;
+      object-fit: contain;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    #image-lightbox-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      background: rgba(0,0,0,0.92);
+      align-items: center;
+      justify-content: center;
+    }
+    #image-lightbox-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 90vw;
+      max-height: 88vh;
+    }
+    #image-lightbox-img {
+      max-width: 90vw;
+      max-height: 65vh;
+      object-fit: contain;
+      border-radius: 6px;
+    }
+    #image-lightbox-text {
+      margin-top: 12px;
+      max-width: 90vw;
+      max-height: 18vh;
+      overflow-y: auto;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #image-lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      font-size: 18px;
+    }
+    #grid-labels-container {
+      position: fixed;
+      inset: 0;
+      z-index: 14;
+      pointer-events: none;
+    }
+    .grid-label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.92);
+      border: 2px solid #1565c0;
+      color: #1565c0;
+      font-size: 11px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    /* 音声入力モーダル・ピン操作選択モーダル共通の土台 */
+    .voice-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: rgba(0,0,0,0.75);
+      align-items: center;
+      justify-content: center;
+    }
+    .voice-modal-box {
+      background: #222;
+      border-radius: 10px;
+      padding: 20px;
+      width: 82vw;
+      max-width: 380px;
+      color: #fff;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    #voice-modal-status {
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    #voice-modal-transcript {
+      background: #111;
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 48px;
+      font-size: 15px;
+      line-height: 1.6;
+      margin-bottom: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .voice-modal-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .voice-modal-buttons button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 14px;
+      color: #fff;
+    }
+    #voice-modal-ok { background: #2e7d32; display: none; }
+    #voice-modal-retry { background: #555; display: none; }
+    #voice-modal-cancel { background: #c62828; }
+    #keyboard-modal-ok { background: #2e7d32; }
+    #keyboard-modal-cancel { background: #c62828; }
+    #oa-confirm-yes { background: #2e7d32; }
+    #oa-confirm-no { background: #555; }
+    #reset-confirm-cancel { background: #555; }
+    #reset-confirm-ok { background: #c62828; }
+    #image-attach-choose { background: #6a1b9a; }
+    #resume-choice-new { background: #555; }
+    #resume-choice-resume { background: #2e7d32; }
+    #align-method-choice-legacy { background: #555; }
+    #align-method-choice-point { background: #2e7d32; }
+    #image-attach-skip { background: #555; }
+    #pin-action-overlay .voice-modal-box {
+      max-height: 76vh;
+      overflow-y: auto;
+    }
+    #pin-action-text {
+      font-size: 14px;
+      margin-bottom: 12px;
+      line-height: 1.6;
+      text-align: left;
+      color: #ddd;
+    }
+    .comment-entry-card {
+      border-left: 4px solid #888;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+    }
+    .comment-entry-meta {
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+    .comment-entry-body {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+    }
+    .comment-entry-image {
+      max-width: 100%;
+      max-height: 160px;
+      border-radius: 6px;
+      margin-top: 6px;
+      object-fit: contain;
+      display: block;
+    }
+    #pin-action-close { background: #2196f3; margin-bottom: 0; width: 100%; border: none; border-radius: 8px; padding: 12px; font-size: 14px; color: #fff; }
+    #ps-banner {
+      display: none;
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 25;
+      background: rgba(33,150,243,0.92);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      text-align: center;
+      max-width: 80vw;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #ps-canvas-wrap {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #1a1a1a;
+      z-index: 15;
+    }
+    #ps-canvas-wrap canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #ps-viewpoint-marker {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+    }
+    #ps-viewpoint-marker .dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #e83030;
+    }
+    #ps-viewpoint-marker .arrow {
+      position: absolute;
+      left: 50%;
+      bottom: 100%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 14px solid #e83030;
+      margin-bottom: 2px;
+    }
+    #color-filter-list {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px 5px;
+      max-height: 68px;
+      overflow-y: auto;
+    }
+    .color-chip {
+      height: 22px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .color-chip-check {
+      font-style: normal;
+      font-size: 12px;
+      font-weight: bold;
+      color: #fff;
+      text-shadow: 0 0 2px rgba(0,0,0,0.7), 0 0 2px rgba(0,0,0,0.7);
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/examples/jsm/loaders/GLTFLoader.js": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js"
+    }
+  }
+  </script>
+  <!-- BCF(.bcfzip)ファイル作成用。UMD形式でwindow.JSZipとしてグローバルに公開される -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+  <div id="model-name-label"></div>
+  <div id="top-right-buttons">
+    <button id="reset-button" aria-label="初期化してモデル選択に戻る">↺ 初期化</button>
+    <button id="right-group-tab" aria-label="パネルの表示切替(左右両方)">メニュー</button>
+  </div>
+  <button id="save-record-button" aria-label="コメントピンをBCFファイルとして保存" style="display:none;position:fixed;top:60px;right:14px;z-index:20;background:rgba(30,30,30,0.8);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;">💾 BCF保存</button>
+  <button id="comment-pin-button" aria-label="コメント追加モードの切替">📍 コメント追加</button>
+  <button id="comment-labels-toggle" aria-label="コメントの一括表示切替">💬 コメント表示</button>
+  <button id="confirm-view-button" aria-label="現在地とコメントのピンをBIM専用ビューで確認する">📍 現在地・コメント確認</button>
+  <div id="comment-labels-container"></div>
+
+  <!-- コメント画像のサムネイルをタップしたときの拡大表示 -->
+  <div id="image-lightbox-overlay">
+    <button id="image-lightbox-close" type="button" aria-label="閉じる">✕</button>
+    <div id="image-lightbox-box">
+      <img id="image-lightbox-img" />
+      <div id="image-lightbox-text"></div>
+    </div>
+  </div>
+  <div id="grid-labels-container"></div>
+
+  <!-- 初期化ボタンの確認モーダル(誤タップ対策) -->
+  <div id="reset-confirm-overlay" class="voice-modal-overlay">
+    <div class="voice-modal-box">
+      <div id="reset-confirm-text">本当に初期化しますか？<br>保存データもすべて消去されます。</div>
+      <div class="voice-modal-buttons" style="margin-top:14px;">
+        <button id="reset-confirm-cancel" type="button">キャンセル</button>
+        <button id="reset-confirm-ok" type="button">初期化する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- モデル選択時、同じファイル(名前+更新日時)の保存データが既にある場合の
+       新規/続きから再開の選択モーダル -->
+  <div id="resume-choice-overlay" class="voice-modal-overlay">
+    <div class="voice-modal-box">
+      <div id="resume-choice-text">このファイルの保存データがあります。<br>続きから再開しますか？</div>
+      <div class="voice-modal-buttons" style="margin-top:14px;">
+        <button id="resume-choice-new" type="button">🆕 新規で始める</button>
+        <button id="resume-choice-resume" type="button">▶ 続きから再開</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- モデル配置直後、位置合わせの方法を選ぶモーダル -->
+  <div id="align-method-choice-overlay" class="voice-modal-overlay">
+    <div class="voice-modal-box">
+      <div id="align-method-choice-text">位置合わせの方法を選んでください</div>
+      <div class="voice-modal-buttons" style="margin-top:14px;">
+        <button id="align-method-choice-legacy" type="button">📐 BIM位置合わせ(従来)</button>
+        <button id="align-method-choice-point" type="button">📍 エッジで合わせる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 音声入力モーダル(テキスト入力欄なし。キーボードを開かないための設計) -->
+  <div id="voice-modal-overlay" class="voice-modal-overlay">
+    <div class="voice-modal-box">
+      <div id="voice-modal-status">🎤 話してください…</div>
+      <div id="voice-modal-transcript"></div>
+      <div class="voice-modal-buttons">
+        <button id="voice-modal-retry" type="button">🔄 やり直す</button>
+        <button id="voice-modal-cancel" type="button">✕ キャンセル</button>
+        <button id="voice-modal-ok" type="button">✅ 保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- キーボードでのコメント入力モーダル -->
+  <div id="keyboard-modal-overlay" class="voice-modal-overlay">
+    <div class="voice-modal-box">
+      <div id="keyboard-modal-title">コメントを入力してください</div>
+      <textarea id="keyboard-modal-input" rows="3" style="width:100%;box-sizing:border-box;border-radius:8px;border:none;padding:8px;font-size:15px;resize:vertical;margin-top:8px;"></textarea>
+      <div class="voice-modal-buttons" style="margin-top:10px;">
+        <button id="keyboard-modal-cancel" type="button">✕ キャンセル</button>
+        <button id="keyboard-modal-ok" type="button">✅ 保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 既存ピンをタップしたときの操作選択モーダル(ボタンのみ、キーボードなし) -->
+  <!-- 既存ピンのコメントスレッド閲覧(AR側は閲覧専用。追記・編集はBIM表示アプリ側で行う) -->
+  <div id="pin-action-overlay" class="voice-modal-overlay">
+    <div class="voice-modal-box">
+      <div id="pin-action-text"></div>
+      <div id="pin-action-buttons">
+        <button id="pin-action-close" type="button">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- コメント保存後、画像(スマホのスクショ等)を任意で添付するためのモーダル -->
+  <div id="image-attach-overlay" class="voice-modal-overlay">
+    <div class="voice-modal-box">
+      <div id="image-attach-status">コメントを保存しました。画像を添付しますか？</div>
+      <div class="voice-modal-buttons">
+        <button id="image-attach-skip" type="button">スキップ</button>
+        <button id="image-attach-choose" type="button">📷 画像を選択</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="pin-image-input" accept="image/*" style="display:none;" />
+  <div id="file-picker">
+    <label for="model-input" id="file-label">BIMモデル(.glb / .gltf)を選択</label>
+    <input type="file" id="model-input" accept=".glb,.gltf" />
+    <button id="manual-ar-start" style="display:none;margin-top:10px;padding:10px 20px;border-radius:8px;border:none;background:#ff9800;color:#fff;font-size:14px;">ARを開始(手動)</button>
+    <div id="file-last-modified" style="margin-top:12px;font-size:11px;color:#888;"></div>
+    <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.15);padding-top:12px;">
+      <label for="intermediate-file-input" id="intermediate-file-label" style="display:inline-block;background:#6a1b9a;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;">📂 JSONファイル(中間ファイル)を読み込む</label>
+      <input type="file" id="intermediate-file-input" accept=".json" style="display:none;" />
+    </div>
+  </div>
+
+  <div id="right-group">
+    <button id="position-toggle-button" aria-label="位置決めを開始・確定">位置決め</button>
+    <div id="ar-controls">
+      <div class="ctrl-row">
+        <div class="ctrl-group">
+          <span>高さ</span>
+          <button id="btn-up" aria-label="上げる">+</button>
+          <button id="btn-down" aria-label="下げる">-</button>
+        </div>
+        <div class="ctrl-group">
+          <span>前後</span>
+          <button id="btn-fwd" aria-label="前へ移動">&#8593;</button>
+          <button id="btn-back" aria-label="後ろへ移動">&#8595;</button>
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-group">
+          <span>回転</span>
+          <button id="btn-rot-left" aria-label="左回転">&#8634;</button>
+          <button id="btn-rot-right" aria-label="右回転">&#8635;</button>
+        </div>
+        <div class="ctrl-group">
+          <span>左右</span>
+          <button id="btn-left" aria-label="左へ移動">&#8592;</button>
+          <button id="btn-right" aria-label="右へ移動">&#8594;</button>
+        </div>
+      </div>
+    </div>
+    <div class="ctrl-row">
+      <button id="btn-rot-90" aria-label="90度回転">
+        <span>回転</span><span>90°</span>
+      </button>
+      <button id="orientation-align-button" aria-label="2点合わせで向きを合わせる" style="display:none;">
+        🧭 2点合わせ
+      </button>
+    </div>
+    <div class="ctrl-row" style="display:none;">
+      <button id="point-align-button" aria-label="エッジ(2点)で位置と向きを合わせる">
+        📍 エッジで合わせる
+      </button>
+    </div>
+    <div class="ctrl-row">
+      <button id="realign-button" aria-label="初回に使った2点を測り直して位置と向きを再調整する">
+        🔁 再合わせ
+      </button>
+    </div>
+    <div class="ctrl-row">
+      <button id="bim-viewer-open-button" aria-label="BIM表示アプリで全体を確認">
+        🌐 全体確認
+      </button>
+    </div>
+  </div>
+
+  <div id="ps-banner">BIM全体の位置と向きをボタンで合わせてください</div>
+  <div id="orientation-align-banner"></div>
+  <svg id="oa-line-svg" style="position:fixed;inset:0;z-index:19;pointer-events:none;display:none;">
+    <line id="oa-line" x1="0" y1="0" x2="0" y2="0" stroke="#ffeb3b" stroke-width="2" stroke-dasharray="6,6" />
+  </svg>
+  <div id="oa-marker-1" class="orientation-align-marker"></div>
+  <div id="oa-crosshair">
+    <div class="oa-crosshair-h"></div>
+    <div class="oa-crosshair-v"></div>
+  </div>
+  <button id="oa-confirm-point-button" type="button">確定</button>
+  <div id="oa-confirm-panel">
+    <div id="oa-confirm-text">この2点でよいですか？</div>
+    <div class="voice-modal-buttons" style="margin-top:10px;">
+      <button id="oa-confirm-no" type="button">やり直す</button>
+      <button id="oa-confirm-yes" type="button">OK</button>
+    </div>
+  </div>
+  <div id="elevation-banner">高さをドラッグで合わせてください</div>
+  <div id="elevation-reference-line"></div>
+  <div id="elevation-drag-handle"></div>
+  <div id="elevation-canvas-wrap"></div>
+  <div id="point-align-canvas-wrap"></div>
+  <svg id="cv-leader-svg"></svg>
+  <button id="cv-list-tab" aria-label="コメント一覧を開く">◀<br>一覧</button>
+  <div id="cv-list-panel"></div>
+  <button id="confirm-view-back-button" aria-label="ARに戻る" style="display:none;position:fixed;top:60px;right:14px;z-index:21;background:#2196f3;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;">⬅ ARに戻る</button>
+  <div id="ps-canvas-wrap">
+    <div id="ps-viewpoint-marker">
+      <div class="dot"></div>
+      <div class="arrow"></div>
+    </div>
+  </div>
+
+
+  <div id="opacity-control">
+    <div id="slider-panel">
+      <div id="color-filter-list"></div>
+      <div>
+        <div class="label"><span>透過</span><span id="opacity-value" class="reset-tap">100%</span></div>
+        <input type="range" id="opacity-slider" min="0" max="100" value="100" />
+      </div>
+      <div id="grid-panel-divider"></div>
+      <div id="grid-toggle-row">
+        <label id="grid-toggle-chip" class="grid-chip checked">
+          <input type="checkbox" id="grid-visible-toggle" checked style="display:none;" />
+          <i class="grid-chip-check" id="grid-toggle-check">✓</i>
+          <span>通り芯</span>
+        </label>
+        <label id="edge-outline-toggle-chip" class="grid-chip checked">
+          <input type="checkbox" id="edge-outline-visible-toggle" checked style="display:none;" />
+          <i class="grid-chip-check" id="edge-outline-toggle-check">✓</i>
+          <span>輪郭</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+
+// 初回のユーザー操作(最初にどこかをタップした瞬間)に合わせて、ブラウザの
+// アドレスバー等を隠す全画面表示にする。全画面化はユーザー操作の最中でしか
+// 呼び出せない制約があるため、最初のタップを1回だけ捕まえて実行する。
+document.addEventListener('pointerdown', function enterFullscreenOnFirstTap() {
+  document.removeEventListener('pointerdown', enterFullscreenOnFirstTap);
+  const el = document.documentElement;
+  const request = el.requestFullscreen || el.webkitRequestFullscreen ||
+    el.mozRequestFullScreen || el.msRequestFullscreen;
+  if (request) {
+    request.call(el).catch(() => {
+      // 全画面化に失敗しても(対応していない環境など)、アプリ自体は通常通り使える
+    });
+  }
+}, { once: true });
+
+// =====================================================
+// このファイルがやっていること
+// 1. GLBファイルを選択すると、自動でARセッションを開始する
+// 2. セッション開始と同時に、カメラの正面にモデルを仮配置する
+// 3. 画面右下のボタンで、位置・高さ・回転を調整する
+// 4. 「位置決め」機能:画面中央に固定の現在地マーカー(赤)を表示し、
+//    BIM全体(黄色く描画される上面図)を、既存の移動・回転ボタンで動かして
+//    大まかな位置・向きを決められる
+// 5. ARを終える(初期化ボタン・ブラウザ標準の終了、どちらでも)と、
+//    ページを丸ごとリロードして最初の状態に戻す。
+// =====================================================
+
+let camera, scene, renderer;
+
+// 選択されたBIMモデルの元データ
+let bimModel = null;
+// 配置済みのモデル(1個だけ。配置後はこれをボタンで微調整する)
+let placedModel = null;
+// placedModelの子。読み込んだ元のジオメトリそのもの(BIM本来のローカル座標系の基準)。
+// BCF書き出し時、AR上のワールド座標からこのローカル座標に逆変換することで、
+// AR配置(位置・回転・拡大)の影響を除いたBIM本来の座標を得る。
+let modelMesh = null;
+// モデルのバウンディングボックス中心(XYZすべて)。
+// 配置時、この中心点が「配置基準点(カメラ正面の位置)」に来るようにする。
+let originOffset = new THREE.Vector3(0, 0, 0);
+
+// ボタン操作時の1回あたりの移動量・回転量
+const MOVE_STEP = 0.05; // メートル
+const HEIGHT_STEP = 0.02; // メートル
+const ROTATE_STEP_DEG = 5; // 度
+
+const loader = new GLTFLoader();
+const fileInput = document.getElementById('model-input');
+const fileLabel = document.getElementById('file-label');
+const modelNameLabel = document.getElementById('model-name-label');
+const arControls = document.getElementById('ar-controls');
+const rightGroup = document.getElementById('right-group');
+const rightGroupTab = document.getElementById('right-group-tab');
+const topRightButtons = document.getElementById('top-right-buttons');
+const filePicker = document.getElementById('file-picker');
+const opacityControl = document.getElementById('opacity-control');
+const opacitySlider = document.getElementById('opacity-slider');
+const opacityValueLabel = document.getElementById('opacity-value');
+const gridVisibleToggle = document.getElementById('grid-visible-toggle');
+const gridToggleChip = document.getElementById('grid-toggle-chip');
+const gridToggleCheck = document.getElementById('grid-toggle-check');
+const edgeOutlineVisibleToggle = document.getElementById('edge-outline-visible-toggle');
+const edgeOutlineToggleChip = document.getElementById('edge-outline-toggle-chip');
+const edgeOutlineToggleCheck = document.getElementById('edge-outline-toggle-check');
+const manualArStartBtn = document.getElementById('manual-ar-start');
+const resetButton = document.getElementById('reset-button');
+const colorFilterList = document.getElementById('color-filter-list');
+const saveRecordButton = document.getElementById('save-record-button');
+const commentPinButton = document.getElementById('comment-pin-button');
+const commentLabelsToggle = document.getElementById('comment-labels-toggle');
+const bimViewerOpenButton = document.getElementById('bim-viewer-open-button');
+bimViewerOpenButton.addEventListener('click', () => {
+  // 同一オリジンなので、BIM表示アプリ側はlocalStorage/IndexedDBを直接読み取れる
+  // (新しいタブを開くだけで繋がる。同じ端末内で完結する場合、中間ファイルの
+  //  やり取り自体が不要なため、ここではダウンロードしない)。
+  window.open('bim-viewer.html', '_blank');
+});
+const commentLabelsContainer = document.getElementById('comment-labels-container');
+const imageLightboxOverlay = document.getElementById('image-lightbox-overlay');
+const imageLightboxImg = document.getElementById('image-lightbox-img');
+const imageLightboxText = document.getElementById('image-lightbox-text');
+const imageLightboxCloseBtn = document.getElementById('image-lightbox-close');
+
+// サムネイルタップで画像とコメント全文を拡大表示する
+function openImageLightbox(dataUrl, text) {
+  imageLightboxImg.src = dataUrl;
+  imageLightboxText.textContent = text || '';
+  imageLightboxOverlay.style.display = 'flex';
+}
+imageLightboxCloseBtn.addEventListener('click', () => {
+  imageLightboxOverlay.style.display = 'none';
+  imageLightboxImg.src = '';
+});
+imageLightboxOverlay.addEventListener('click', (e) => {
+  if (e.target === imageLightboxOverlay) {
+    imageLightboxOverlay.style.display = 'none';
+    imageLightboxImg.src = '';
+  }
+});
+const gridLabelsContainer = document.getElementById('grid-labels-container');
+let gridLabelsData = []; // { tag, position: THREE.Vector3 } の配列(bimModelのローカル座標系)
+let gridLineObject = null; // 通り芯のLineSegmentsオブジェクト(GLTFLoaderが作るものをそのまま使う)
+let gridLabelsVisible = true; // 通り芯の丸バッジラベルの表示状態(トグルと連動)
+let edgeOutlineFeatureEnabled = true; // 輪郭線ON/OFFトグルの状態(デフォルトON)
+const gridLabelElements = []; // gridLabelsDataと同じ並びの丸バッジdiv要素
+let commentLabelsVisible = false;
+const pinLabelElements = new Map(); // pin -> ラベルのdiv要素
+const voiceModalOverlay = document.getElementById('voice-modal-overlay');
+const voiceModalStatus = document.getElementById('voice-modal-status');
+const voiceModalTranscript = document.getElementById('voice-modal-transcript');
+const voiceModalOkBtn = document.getElementById('voice-modal-ok');
+const voiceModalRetryBtn = document.getElementById('voice-modal-retry');
+const voiceModalCancelBtn = document.getElementById('voice-modal-cancel');
+const keyboardModalOverlay = document.getElementById('keyboard-modal-overlay');
+const keyboardModalTitle = document.getElementById('keyboard-modal-title');
+const keyboardModalInput = document.getElementById('keyboard-modal-input');
+const keyboardModalOkBtn = document.getElementById('keyboard-modal-ok');
+const keyboardModalCancelBtn = document.getElementById('keyboard-modal-cancel');
+const pinActionOverlay = document.getElementById('pin-action-overlay');
+const pinActionText = document.getElementById('pin-action-text');
+const pinActionCloseBtn = document.getElementById('pin-action-close');
+const imageAttachOverlay = document.getElementById('image-attach-overlay');
+const imageAttachSkipBtn = document.getElementById('image-attach-skip');
+const imageAttachChooseBtn = document.getElementById('image-attach-choose');
+const pinImageInput = document.getElementById('pin-image-input');
+
+// タップでコメントピンを配置する機能の状態
+let commentModeActive = false;
+const commentPins = []; // { mesh, text, createdAt, cameraPosition, cameraDirection, cameraUp } の配列
+const raycaster = new THREE.Raycaster();
+
+// 位置決め機能のUI要素
+const positionToggleButton = document.getElementById('position-toggle-button');
+const psBanner = document.getElementById('ps-banner');
+const psCanvasWrap = document.getElementById('ps-canvas-wrap');
+const pointAlignCanvasWrap = document.getElementById('point-align-canvas-wrap');
+const orientationAlignButton = document.getElementById('orientation-align-button');
+const pointAlignButton = document.getElementById('point-align-button');
+const realignButton = document.getElementById('realign-button');
+// 初回の「エッジで合わせる」で使ったBIM側の2点(placedModelローカル座標)。再合わせ・現在地表示で使う
+let alignRef = null;
+let confirmViewRefMarkers = [];
+let confirmViewPrevLabelsVisible = false;
+let realignActive = false;
+const confirmViewButton = document.getElementById('confirm-view-button');
+const confirmViewBackButton = document.getElementById('confirm-view-back-button');
+const cvLeaderSvg = document.getElementById('cv-leader-svg');
+const cvListTab = document.getElementById('cv-list-tab');
+const cvListPanel = document.getElementById('cv-list-panel');
+const cvLeaderLines = new Map();
+const orientationAlignBanner = document.getElementById('orientation-align-banner');
+const oaMarker1 = document.getElementById('oa-marker-1');
+const oaCrosshair = document.getElementById('oa-crosshair');
+const oaConfirmPointButton = document.getElementById('oa-confirm-point-button');
+const oaLineSvg = document.getElementById('oa-line-svg');
+const oaLine = document.getElementById('oa-line');
+const oaConfirmPanel = document.getElementById('oa-confirm-panel');
+const oaConfirmText = document.getElementById('oa-confirm-text');
+const oaConfirmYesBtn = document.getElementById('oa-confirm-yes');
+const oaConfirmNoBtn = document.getElementById('oa-confirm-no');
+let oaConfirmYesHandler = null;
+let oaConfirmNoHandler = null;
+oaConfirmPointButton.addEventListener('click', () => {
+  if (orientationAlignStep > 0) {
+    confirmOrientationAlignPoint();
+  } else if (pointAlignStep === 1) {
+    confirmPointAlignBimPoint();
+  } else if (pointAlignStep === 2) {
+    confirmPointAlignRealPoint();
+  }
+});
+pointAlignButton.addEventListener('click', () => {
+  if (pointAlignStep > 0) {
+    cancelPointAlign();
+  } else {
+    startPointAlign();
+  }
+});
+realignButton.addEventListener('click', () => {
+  if (realignActive || pointAlignStep > 0) {
+    cancelPointAlign();
+    return;
+  }
+  startRealign();
+});
+confirmViewButton.addEventListener('click', () => {
+  if (confirmViewActive) {
+    cancelConfirmView();
+  } else {
+    startConfirmView();
+  }
+});
+oaConfirmYesBtn.addEventListener('click', () => {
+  oaConfirmPanel.style.display = 'none';
+  const handler = oaConfirmYesHandler;
+  oaConfirmYesHandler = null;
+  oaConfirmNoHandler = null;
+  if (handler) handler();
+});
+oaConfirmNoBtn.addEventListener('click', () => {
+  oaConfirmPanel.style.display = 'none';
+  const handler = oaConfirmNoHandler;
+  oaConfirmYesHandler = null;
+  oaConfirmNoHandler = null;
+  if (handler) handler();
+});
+const elevationBanner = document.getElementById('elevation-banner');
+const elevationReferenceLine = document.getElementById('elevation-reference-line');
+const elevationDragHandle = document.getElementById('elevation-drag-handle');
+const elevationCanvasWrap = document.getElementById('elevation-canvas-wrap');
+
+// 位置決め機能の状態
+let positionSettingActive = false;
+let psRenderer = null;
+let psCamera = null;
+let psScene = null;
+let psPreviewModel = null; // 影・グラデーションのない、のっぺり表示専用の複製
+
+// 「2点合わせ」による向き(回転)自動計算の状態
+// step: 0=非活性, 1=実物の点1待ち, 2=実物の点2待ち, 3=BIM上の点1待ち, 4=BIM上の点2待ち
+let orientationAlignStep = 0;
+let orientationAlignRay1 = null; // 実物側、点1のレイの向き(THREE.Vector3、ワールド空間)
+let orientationAlignRay2 = null; // 実物側、点2のレイの向き
+let orientationAlignModelPoint1 = null; // BIM側、点1(placedModelのローカル座標)
+let orientationAlignLastHit = null; // BIM側、画面中央が今ヒットしているワールド座標
+
+// 「エッジで合わせる」(エッジ1本=2点による位置合わせ)の状態
+// 重力方向(Y軸)は最初から既知という前提があるため、エッジの2点(角Aと、
+// もう片端B)の対応だけで、Y軸回転+位置XYZの4自由度を過不足なく解ける。
+// step: 0=非活性, 1=BIM側を選択中, 2=実物側の点をDepth Sensingで選択中
+// BIM側は2段階: stage 0=角(エッジの片端)を選ぶ、1=そこに繋がるエッジ(もう片端)を選ぶ
+let pointAlignStep = 0;
+let pointAlignStage = 0;
+let pointAlignCornerLocal = null; // 角(エッジの片端, A)。placedModelのローカル座標
+let pointAlignEdgeOtherLocal = null; // エッジのもう片端(B)
+let pointAlignConnectedEdges = []; // 角(A)に繋がっているエッジ(modelEdgeSegmentsの部分集合)
+let pointAlignBimMarkers = []; // 確定した2点(A,B)を示す、番号付きの3Dマーカー(placedModelの子)
+let pointAlignRealPointsWorld = []; // 実物側で選んだ3点(ワールド座標)、A→B→Cの順
+let pointAlignRealMarkers = []; // 上記に対応する、番号付きの3Dマーカー(sceneに追加)
+let pointAlignPendingVertex = null; // BIM側、角(A)を選ぶ段階での候補頂点
+let pointAlignPendingEdge = null; // BIM側、エッジ(B)を選ぶ段階での候補
+let pointAlignPreviewMarker = null; // BIM側、選択中の候補を示す3Dマーカー(オレンジ)
+let pointAlignLiveWorldPoint = null; // 実物側、Depth Sensingで検出中の暫定の点(まだ未確定)
+let arDepthUsage = null; // 実際に有効になったDepth Sensingの方式(cpu-optimized等。null=非対応)
+let arDepthDataFormat = null; // 実際に有効になった深度データの形式(診断表示用)
+// BIM側の点を選ぶ間、実際の部屋を歩き回らずに済むよう、BIMのみを表示する
+// 専用のビュー(ピンチズーム・スライド移動で自由に見る位置を変えられる)
+let pointAlignRenderer = null;
+let pointAlignCamera = null;
+let pointAlignScene = null;
+const pointAlignActivePointers = new Map(); // pointerId -> {x, y}(現在位置)
+let pointAlignPanLastX = 0, pointAlignPanLastY = 0; // 指1本でのスライド移動、直近の位置
+let pointAlignPinchLastDist = 0; // 指2本でのピンチズーム、直近の距離(px)
+let pointAlignRotateLastX = 0, pointAlignRotateLastY = 0; // 指2本での回転、直近の中点位置
+let pointAlignYaw = 0; // BIM専用ビューカメラの現在の向き(左右、ラジアン)
+let pointAlignPitch = 0; // BIM専用ビューカメラの現在の向き(上下、ラジアン)
+let modelEdgeSegments = []; // BIM側の全輪郭線分(頂点スナップ検索用)。autoPlaceModel時に構築する
+const POINT_ALIGN_COLORS = [0xff5252, 0x7c4dff]; // 点1〜2(角・エッジ先)の色
+
+// 「現在地・コメント確認」(セッションを切らずに、BIM専用ビューで現在地と
+// コメントピンを確認できる軽量ビュー)の状態
+let confirmViewActive = false;
+let confirmViewMarker = null; // 現在地を示す3Dマーカー(矢印)。pointAlignSceneの子として表示する
+// 現在地・コメント確認の軌道カメラ(モデル全体の中心を見ながら、周りを回る)
+const confirmOrbit = { target: new THREE.Vector3(), dist: 10, yaw: 0, pitch: 0.6 };
+
+
+// 高さ調整(立面図)の状態
+// 位置決め(上から見た画面)の「決定」を押した後、続けてこの画面に入る。
+// 遠近法の無い横からの2D表示(placedModelの現在の向きを基準に、真横(90度)
+// から見る)+ 画面に固定された赤い基準線を使い、黄色いハンドルをドラッグして
+// placedModelの高さ(position.y)を調整する。
+let heightAlignmentActive = false;
+let elevationRenderer = null;
+let elevationCamera = null;
+let elevationScene = null;
+let elevationPreviewModel = null;
+let elevationDragging = false;
+let elevationDragStartClientY = 0;
+let elevationDragStartY = 0;
+let positionSettingForward = null; // 位置決め開始時に固定した「前方向」(立面図の向き計算に使う)
+
+// 色ごとの透過ON/OFF設定。キー=色の16進数、値={materials, enabled}
+const colorGroups = new Map();
+
+// 現在の透過設定(0〜1)。配置前に動かしても、配置時にこの値が適用される。
+let currentOpacity = 1;
+// 拡大縮小スライダーは廃止したため、常に1(100%)固定で使う
+let currentScale = 1;
+// 選択中のファイル名(左上表示用)
+let selectedFileName = '';
+
+// ---- モデルファイル自体のキャッシュ(IndexedDB) ----
+// セッションが切れて再読み込みされた際、「同じファイルをもう一度選び直す」
+// 手間を省くため、選択されたファイルの中身自体をブラウザ内に保存しておく。
+// (localStorageはサイズ制限が厳しく大きなファイルに不向きなため、
+//  容量に余裕があるIndexedDBを使う)
+// モデルごとに区別するためのキーは「ファイル名 + ファイル自体の最終更新日時」を
+// そのまま繋げただけのもの(特別な計算は行わない。同じファイル名の物件が
+// 複数あっても、更新日時までまったく同じになることは通常ない)。
+const MODEL_CACHE_DB_NAME = 'bimArViewerCache';
+const MODEL_CACHE_STORE = 'modelFile';
+
+function computeModelKey(fileName, lastModified) {
+  return `${fileName}::${lastModified}`;
+}
+
+function openModelCacheDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(MODEL_CACHE_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(MODEL_CACHE_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function cacheModelFile(modelKey, file) {
+  try {
+    const db = await openModelCacheDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(MODEL_CACHE_STORE, 'readwrite');
+      tx.objectStore(MODEL_CACHE_STORE).put(file, modelKey);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.error('モデルファイルのキャッシュに失敗しました', err);
+  }
+}
+
+async function loadCachedModelFile(modelKey) {
+  try {
+    const db = await openModelCacheDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(MODEL_CACHE_STORE, 'readonly');
+      const req = tx.objectStore(MODEL_CACHE_STORE).get(modelKey);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.error('キャッシュ済みモデルファイルの読み込みに失敗しました', err);
+    return null;
+  }
+}
+
+async function clearCachedModelFile(modelKey) {
+  try {
+    const db = await openModelCacheDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(MODEL_CACHE_STORE, 'readwrite');
+      tx.objectStore(MODEL_CACHE_STORE).delete(modelKey);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    // 何もしない
+  }
+}
+
+async function listCachedModelKeys() {
+  try {
+    const db = await openModelCacheDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(MODEL_CACHE_STORE, 'readonly');
+      const req = tx.objectStore(MODEL_CACHE_STORE).getAllKeys();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    return [];
+  }
+}
+
+// 現在扱っているモデルのキー(ファイル名::最終更新日時)。
+// ファイルが選択される(または再開される)たびに設定される。
+let currentModelKey = null;
+
+// 位置決めモードを自動でスキップするためのフラグ(「続きから再開」時に使う)
+let skipPositionSettingOnPlace = false;
+// 再開(緑ボタン、またはオレンジの案内を見て同じファイルを選び直した場合)かどうか。
+// 再開時は、位置決め・透過のパネルを最初から閉じた状態で始める。
+let isResumedSession = false;
+
+const resumeChoiceOverlay = document.getElementById('resume-choice-overlay');
+const resumeChoiceNewBtn = document.getElementById('resume-choice-new');
+const resumeChoiceResumeBtn = document.getElementById('resume-choice-resume');
+
+const alignMethodChoiceOverlay = document.getElementById('align-method-choice-overlay');
+const alignMethodChoiceLegacyBtn = document.getElementById('align-method-choice-legacy');
+const alignMethodChoicePointBtn = document.getElementById('align-method-choice-point');
+alignMethodChoiceLegacyBtn.addEventListener('click', () => {
+  alignMethodChoiceOverlay.style.display = 'none';
+  startPositionSetting();
+});
+alignMethodChoicePointBtn.addEventListener('click', () => {
+  alignMethodChoiceOverlay.style.display = 'none';
+  startPointAlign();
+});
+
+fileInput.addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!/\.(glb|gltf)$/i.test(file.name)) {
+    fileLabel.textContent = '.glbまたは.gltfファイルを選択してください';
+    return;
+  }
+
+  // このファイル(名前+更新日時)専用のキーで、既に保存データが
+  // あるかどうかを確認する(完全一致のみ。中身が違う同名ファイルを
+  // 誤って拾わないようにするため)
+  const modelKey = computeModelKey(file.name, file.lastModified);
+  const existingState = loadSavedAppState(modelKey);
+
+  if (existingState) {
+    // 既に保存データがある場合は、新規/続きから再開をユーザーに選んでもらう
+    resumeChoiceOverlay.style.display = 'flex';
+
+    const onNew = () => {
+      resumeChoiceOverlay.style.display = 'none';
+      cleanup();
+      // 「新規」を選んだ場合は、古い保存データを消してからまっさらに始める
+      clearSavedAppState(modelKey);
+      loadModelFile(file, modelKey, false);
+    };
+    const onResume = () => {
+      resumeChoiceOverlay.style.display = 'none';
+      cleanup();
+      loadModelFile(file, modelKey, true);
+    };
+    function cleanup() {
+      resumeChoiceNewBtn.removeEventListener('click', onNew);
+      resumeChoiceResumeBtn.removeEventListener('click', onResume);
+    }
+    resumeChoiceNewBtn.addEventListener('click', onNew);
+    resumeChoiceResumeBtn.addEventListener('click', onResume);
+    return;
+  }
+
+  loadModelFile(file, modelKey, false);
+});
+
+// GLB/GLTFファイルを実際に読み込む共通処理。
+// resumeがtrueの場合、保存済みの位置合わせ結果をそのまま使い、
+// 位置決め(確定操作)を省略して通常のAR画面にそのまま入る。
+function loadModelFile(file, modelKey, resume) {
+  fileLabel.textContent = '読み込み中...';
+  manualArStartBtn.style.display = 'none';
+
+  currentModelKey = modelKey;
+  skipPositionSettingOnPlace = resume;
+  isResumedSession = resume;
+
+  // 次回、セッションが切れた際に同じファイルを選び直さなくて済むよう、
+  // 選択されたファイルの中身自体もキャッシュしておく
+  cacheModelFile(currentModelKey, file);
+
+  const objectUrl = URL.createObjectURL(file);
+  loader.load(
+    objectUrl,
+    (gltf) => {
+      onModelLoaded(gltf, file.name);
+      URL.revokeObjectURL(objectUrl);
+    },
+    undefined,
+    (error) => onModelLoadError(error)
+  );
+}
+
+// モデル読み込み成功時の共通処理(単一ファイル・複数ファイルどちらの経路からも呼ばれる)
+function onModelLoaded(gltf, fileName) {
+  bimModel = gltf.scene;
+
+  // まず、スケール変更前の生のサイズを測定する
+  bimModel.updateMatrixWorld(true);
+  const rawBox = new THREE.Box3().setFromObject(bimModel);
+  const rawSize = new THREE.Vector3();
+  rawBox.getSize(rawSize);
+  const maxDim = Math.max(rawSize.x, rawSize.y, rawSize.z);
+
+  // 明らかに巨大(1000を超える)ならミリメートル単位とみなし1/1000に、
+  // それ以外はメートル単位とみなしそのまま(1倍)にする
+  const scaleFactor = maxDim > 1000 ? 0.001 : 1;
+  bimModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+  fileLabel.textContent = `選択中: ${fileName}`;
+  selectedFileName = fileName;
+
+  // 面同士のなす角度が一定以上(=本当の稜線)の場所だけ、白い輪郭線を重ねる。
+  // 平らな面の中の三角形分割線は無視されるので、広い面でも三角形が目立たない。
+  // (bimModel.clone()で複製されるより前に付けておくことで、実際にARで
+  //  表示されるmodelMesh側にも自動的に引き継がれる)
+  addEdgeOutlines(bimModel);
+
+  // 画面には出さないが、開発者ツールのコンソールで確認できるようにしておく
+  console.log(
+    `[スケール判定] raw size: (${rawSize.x.toFixed(2)}, ${rawSize.y.toFixed(2)}, ${rawSize.z.toFixed(2)}) → maxDim: ${maxDim.toFixed(2)} → scaleFactor: x${scaleFactor}`
+  );
+
+  // バウンディングボックスの中心(高さ含む)を自動で基準点にする
+  bimModel.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(bimModel);
+  box.getCenter(originOffset);
+
+  // 通り芯ラベル(X1・X2・Y1・Y2等)があれば抽出しておく。
+  // (GridLinesノードのextrasは、GLTFLoaderによって自動的にuserDataに反映される)
+  gridLabelsData = [];
+  gridLabelsContainer.innerHTML = '';
+  gridLabelElements.length = 0;
+  gridLineObject = null;
+  bimModel.traverse((obj) => {
+    if (obj.name === 'GridLines' && obj.userData && Array.isArray(obj.userData.gridLabels)) {
+      obj.userData.gridLabels.forEach((label) => {
+        gridLabelsData.push({
+          tag: label.tag,
+          position: new THREE.Vector3(label.position[0], label.position[1], label.position[2]),
+        });
+      });
+
+      // 円柱メッシュへの置き換えを試みたところ、逆に「表示自体」が
+      // 不安定になったため、最初に確実に表示できていた構成
+      // (GLTFLoaderが直接作るLineSegmentsをそのまま使う)に戻した。
+      // 太さ調整スライダーは廃止。ただしlinewidthだけ試しに太めの値を
+      // 設定しておく(多くのブラウザでは無視される既知の制限があるが、
+      // 表示自体は一切変更しないので安全)。
+      gridLineObject = obj;
+      gridLineObject.material.color.set(0xffffff);
+      gridLineObject.material.linewidth = 3;
+    }
+  });
+
+  // モデル内で使われている色を検出し、色別の透過チェックリストを作る
+  buildColorGroups(bimModel);
+  renderColorFilterList();
+
+  // 読み込みが終わったら、続けて自動でARを開始する
+  // (ファイル選択というユーザー操作の直後に呼ぶことで、ブラウザの
+  //  「ユーザー操作がきっかけでないとARを開始できない」制約を満たす)
+  startARSession();
+}
+
+function onModelLoadError(error) {
+  console.error('BIMモデルの読み込みに失敗しました', error);
+  fileLabel.textContent = '読み込み失敗。もう一度選択してください';
+}
+
+// BCF(BIM Collaboration Format)のGUIDを生成する(RFC4122簡易版で十分)
+function generateGuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// XML特殊文字をエスケープする
+function escapeXml(str) {
+  return String(str).replace(/[<>&'"]/g, (c) => ({
+    '<': '&lt;',
+    '>': '&gt;',
+    '&': '&amp;',
+    "'": '&apos;',
+    '"': '&quot;',
+  }[c]));
+}
+
+// AR上のワールド座標を、BIM本来の座標系(IFCのZ-up)に逆変換する。
+// ①modelMeshのローカル座標に変換(AR配置による移動・回転・拡大の影響を除く)
+// ②IFC→GLTF変換時に行った Z-up→Y-up 変換(x,y,z)→(x,z,-y) の逆変換 (x,y,z)→(x,-z,y) を適用
+function worldToBimCoords(worldVec, isDirection) {
+  const local = worldVec.clone();
+  if (isDirection) {
+    // 方向ベクトルは、平行移動の影響を受けないよう回転・拡縮のみを適用する
+    const worldQuat = new THREE.Quaternion();
+    modelMesh.getWorldQuaternion(worldQuat);
+    local.applyQuaternion(worldQuat.invert());
+  } else {
+    modelMesh.worldToLocal(local);
+  }
+  // Y-up(glTF) -> Z-up(IFC)
+  return new THREE.Vector3(local.x, -local.z, local.y);
+}
+
+// BCFのmarkup.bcf(トピック本体+コメント)のXMLを組み立てる
+function buildMarkupXml({ topicGuid, commentGuid, viewpointGuid, text, isoDate, hasSnapshot }) {
+  const safeText = escapeXml(text);
+  const title = safeText.length > 40 ? safeText.slice(0, 40) + '…' : safeText;
+  const snapshotAttr = hasSnapshot ? ' Snapshot="snapshot.png"' : '';
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Markup>
+  <Topic Guid="${topicGuid}" TopicType="Comment" TopicStatus="Open">
+    <Title>${title}</Title>
+    <CreationDate>${isoDate}</CreationDate>
+    <CreationAuthor>bim-ar-viewer</CreationAuthor>
+  </Topic>
+  <Comment Guid="${commentGuid}">
+    <Date>${isoDate}</Date>
+    <Author>bim-ar-viewer</Author>
+    <Comment>${safeText}</Comment>
+    <Viewpoint Guid="${viewpointGuid}"/>
+  </Comment>
+  <Viewpoints Guid="${viewpointGuid}" Viewpoint="viewpoint.bcfv"${snapshotAttr}/>
+</Markup>`;
+}
+
+// BCFのviewpoint.bcfv(視点情報)のXMLを組み立てる。
+// 現時点ではIFC部材(GUID)との紐付け(<Components>)は行わず、視点情報のみ。
+// (将来、タップした部材のIFC GUIDを特定できるようになれば、ここに<Components>を追加できる)
+function buildViewpointXml({ viewpointGuid, position, direction, up }) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<VisualizationInfo Guid="${viewpointGuid}">
+  <PerspectiveCamera>
+    <CameraViewPoint>
+      <X>${position.x}</X>
+      <Y>${position.y}</Y>
+      <Z>${position.z}</Z>
+    </CameraViewPoint>
+    <CameraDirection>
+      <X>${direction.x}</X>
+      <Y>${direction.y}</Y>
+      <Z>${direction.z}</Z>
+    </CameraDirection>
+    <CameraUpVector>
+      <X>${up.x}</X>
+      <Y>${up.y}</Y>
+      <Z>${up.z}</Z>
+    </CameraUpVector>
+    <FieldOfView>60</FieldOfView>
+  </PerspectiveCamera>
+</VisualizationInfo>`;
+}
+
+const BCF_VERSION_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<Version VersionId="2.1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="version.xsd">
+  <DetailedVersion>2.1</DetailedVersion>
+</Version>`;
+
+// ボタンのテキストを一時的に変えて、簡易的な通知として使う
+// (window.alert()等のネイティブダイアログはAR中にセッションを終了させる恐れがあるため使わない)
+function flashButtonMessage(button, message, durationMs) {
+  const original = button.textContent;
+  button.textContent = message;
+  setTimeout(() => {
+    button.textContent = original;
+  }, durationMs);
+}
+
+// 全コメントピンを、BCF(.bcfzip)ファイルとして書き出す
+async function exportBCF() {
+  if (commentPins.length === 0) {
+    flashButtonMessage(saveRecordButton, '⚠ コメントがありません', 2000);
+    return;
+  }
+  if (typeof JSZip === 'undefined') {
+    flashButtonMessage(saveRecordButton, '⚠ ZIP機能の読込に失敗', 2000);
+    return;
+  }
+
+  const zip = new JSZip();
+  zip.file('bcf.version', BCF_VERSION_XML);
+
+  commentPins.forEach((pin) => {
+    const topicGuid = generateGuid();
+    const commentGuid = generateGuid();
+    const viewpointGuid = generateGuid();
+    const folder = zip.folder(topicGuid);
+
+    const entries = normalizePinEntries(pin);
+    // 複数entryを、日時付きで1つのBCFコメント本文にまとめる
+    // (BCF側の複数コメント対応は将来の課題とし、今回はまとめて1件にする)
+    const combinedText = entries
+      .map((e) => `[${formatEntryDate(e.createdAt)}]\n${e.text}`)
+      .join('\n\n');
+    const firstCreatedAt = entries[0] ? entries[0].createdAt : new Date().toISOString();
+    const imageEntry = [...entries].reverse().find((e) => e.image);
+
+    const bimPosition = worldToBimCoords(pin.cameraPosition, false);
+    const bimDirection = worldToBimCoords(pin.cameraDirection, true).normalize();
+    const bimUp = worldToBimCoords(pin.cameraUp, true).normalize();
+
+    folder.file(
+      'markup.bcf',
+      buildMarkupXml({
+        topicGuid,
+        commentGuid,
+        viewpointGuid,
+        text: combinedText,
+        isoDate: firstCreatedAt,
+        hasSnapshot: Boolean(imageEntry),
+      })
+    );
+    folder.file(
+      'viewpoint.bcfv',
+      buildViewpointXml({
+        viewpointGuid,
+        position: bimPosition,
+        direction: bimDirection,
+        up: bimUp,
+      })
+    );
+    if (imageEntry) {
+      const base64Data = imageEntry.image.split(',')[1];
+      folder.file('snapshot.png', base64Data, { base64: true });
+    }
+  });
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  a.href = url;
+  a.download = `bim-ar-comments_${timestamp}.bcfzip`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+saveRecordButton.addEventListener('click', () => {
+  exportBCF();
+});
+
+// コメント追加モードのON/OFF切替
+function setCommentModeActive(active) {
+  commentModeActive = active;
+  commentPinButton.classList.toggle('active', commentModeActive);
+  commentPinButton.textContent = commentModeActive
+    ? '📍 タップして配置'
+    : '📍 コメント追加';
+}
+
+commentPinButton.addEventListener('click', () => {
+  setCommentModeActive(!commentModeActive);
+});
+
+// コメント一括表示のON/OFF切替
+commentLabelsToggle.addEventListener('click', () => {
+  commentLabelsVisible = !commentLabelsVisible;
+  commentLabelsToggle.classList.toggle('active', commentLabelsVisible);
+  commentLabelsToggle.textContent = commentLabelsVisible ? '💬 コメント非表示' : '💬 コメント表示';
+  if (!commentLabelsVisible) {
+    // OFFにする際、表示中だったラベルのDOM要素を全て消す
+    pinLabelElements.forEach((el) => el.remove());
+    pinLabelElements.clear();
+  }
+});
+
+// パネルの折りたたみタブ(1つのボタンで左右両方のパネルを同時に開閉する)
+rightGroupTab.addEventListener('click', () => {
+  const collapsed = rightGroup.classList.toggle('collapsed');
+  opacityControl.classList.toggle('collapsed', collapsed);
+});
+
+// コメント一括表示ONの間、毎フレーム呼ばれる。
+// 各ピンのワールド座標を画面上の2D座標に投影し、その位置にラベルを配置する。
+// 確認ビュー中、吹き出しをドラッグで動かす(ドラッグせずに離したらコメントを開く)
+function attachLabelDrag(label, pin) {
+  let startX = 0, startY = 0, moved = false, dragging = false;
+  label.addEventListener('pointerdown', (e) => {
+    if (!confirmViewActive) return;
+    dragging = true; moved = false;
+    startX = e.clientX; startY = e.clientY;
+    label.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+  });
+  label.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (!moved && Math.abs(dx) + Math.abs(dy) < 8) return;
+    moved = true;
+    const off = pin.labelOffset || { x: 0, y: -60 };
+    pin.labelOffset = { x: off.x + (e.clientX - startX), y: off.y + (e.clientY - startY) };
+    startX = e.clientX; startY = e.clientY;
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    if (moved) saveAppState();
+    else showPinThreadView(pin);
+  };
+  label.addEventListener('pointerup', end);
+  label.addEventListener('pointercancel', () => { dragging = false; });
+}
+
+function updateCommentLabels() {
+  if (!commentLabelsVisible || !placedModel) return;
+  // 現在地・コメント確認中は、BIM専用ビューのカメラで投影する
+  const projCamera = (confirmViewActive && pointAlignCamera) ? pointAlignCamera : camera;
+
+  const halfWidth = window.innerWidth / 2;
+  const halfHeight = window.innerHeight / 2;
+  const tempVec = new THREE.Vector3();
+
+  commentPins.forEach((pin) => {
+    let label = pinLabelElements.get(pin);
+    if (!label) {
+      label = document.createElement('div');
+      label.className = 'comment-label';
+      label.style.touchAction = 'none';
+      attachLabelDrag(label, pin);
+      const textSpan = document.createElement('div');
+      textSpan.className = 'comment-label-text';
+      label.appendChild(textSpan);
+      commentLabelsContainer.appendChild(label);
+      pinLabelElements.set(pin, label);
+    }
+    const textSpan = label.querySelector('.comment-label-text');
+    const entries = normalizePinEntries(pin);
+    const latest = entries[entries.length - 1];
+    textSpan.textContent = entries.length > 1
+      ? `${latest.text}(${entries.length}件)`
+      : (latest ? latest.text : '');
+
+    pin.mesh.getWorldPosition(tempVec);
+    tempVec.project(projCamera);
+    label.style.pointerEvents = confirmViewActive ? 'auto' : 'none';
+
+    let line = cvLeaderLines.get(pin);
+    if (tempVec.z > 1 || tempVec.z < -1) {
+      // カメラの視錐台の外(背後含む)にあるので非表示
+      label.style.display = 'none';
+      if (line) line.style.display = 'none';
+      return;
+    }
+    label.style.display = 'block';
+    const px = tempVec.x * halfWidth + halfWidth;
+    const py = -tempVec.y * halfHeight + halfHeight;
+    if (confirmViewActive) {
+      // 現在地・コメント確認中: 吹き出しをずらして置き、ピンへ引き出し線を引く
+      const off = pin.labelOffset || { x: 0, y: -60 };
+      label.style.left = `${px + off.x}px`;
+      label.style.top = `${py + off.y}px`;
+      if (!line) {
+        line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('stroke', '#ffeb3b');
+        line.setAttribute('stroke-width', '2');
+        line.setAttribute('stroke-dasharray', '6,5');
+        cvLeaderSvg.appendChild(line);
+        cvLeaderLines.set(pin, line);
+      }
+      line.style.display = '';
+      line.setAttribute('x1', px);
+      line.setAttribute('y1', py);
+      line.setAttribute('x2', px + off.x);
+      line.setAttribute('y2', py + off.y);
+    } else {
+      label.style.left = `${px}px`;
+      label.style.top = `${py}px`;
+      if (line) line.style.display = 'none';
+    }
+  });
+
+  // 削除済みピンに対応するラベルが残っていれば掃除する
+  pinLabelElements.forEach((el, pin) => {
+    if (!commentPins.includes(pin)) {
+      el.remove();
+      pinLabelElements.delete(pin);
+    }
+  });
+}
+
+// 通り芯ラベル(X1・X2・Y1・Y2等の丸バッジ)の画面上の位置を毎フレーム更新する。
+// ラベル位置はbimModelのローカル座標系に保存されているため、modelMeshの
+// ワールド変換(AR配置による移動・回転・拡大を含む)を適用してから画面に投影する。
+
+// 通り芯の丸バッジラベルの表示/非表示を切り替える
+function updateGridLabelsVisibility(visible) {
+  gridLabelsVisible = visible;
+  gridLabelElements.forEach((el) => {
+    if (el) el.style.display = visible ? '' : 'none';
+  });
+}
+
+// ---- セッション断絶(キーボード・画像選択でARが強制終了する不具合)対策 ----
+// モデルの位置合わせ結果とコメントピン(画像込み)をブラウザのlocalStorageに保存し、
+// ページが再読み込みされた後、同じファイルを選び直すだけで自動的に復元できるようにする。
+// (現実の空間に対する「位置合わせ」自体はセッションをまたいで復元できないため、
+//  そこだけは毎回やり直しが必要。ただしコメントピンは失われずに済む)
+// キーはモデルごと(ファイル名+更新日時)に分かれているため、複数のモデルを
+// 切り替えても、互いのコメントが上書きされて消えることはない。
+const APP_STATE_STORAGE_KEY_PREFIX = 'bimArViewerAppState::';
+
+function appStateStorageKeyFor(modelKey) {
+  return APP_STATE_STORAGE_KEY_PREFIX + modelKey;
+}
+
+// ファイルをbase64のdata URLに変換する
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// 中間ファイル(JSON)をダウンロードフォルダに保存する。
+// モデル本体(キャッシュ済みのGLB/GLTF)もbase64で埋め込むため、
+// 別端末に渡す際、このJSON1つだけで完結する(モデルファイルを
+// 別途選び直す必要がない)。
+// 同名ファイルがあればブラウザが自動的に別名(「(1)」等)で保存するため、
+// 上書きの心配はない。古くなったファイルは、ユーザー自身が
+// ダウンロードフォルダから削除・整理する運用とする。
+async function downloadIntermediateFile(state) {
+  try {
+    const stateToSave = { ...state };
+    const modelKey = state.modelKey;
+    if (modelKey) {
+      const cachedFile = await loadCachedModelFile(modelKey);
+      if (cachedFile) {
+        stateToSave.modelFileBase64 = await fileToBase64(cachedFile);
+      }
+    }
+
+    const blob = new Blob([JSON.stringify(stateToSave)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const baseName = (state.fileName || 'model').replace(/\.[^.]+$/, '');
+    a.href = url;
+    a.download = `${baseName}_JSONファイル.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error('中間ファイルの自動保存に失敗しました', err);
+  }
+}
+
+function saveAppState() {
+  if (!placedModel || !currentModelKey) return;
+  try {
+    const colorFilters = {};
+    colorGroups.forEach((group, hex) => {
+      colorFilters[hex] = group.enabled;
+    });
+
+    const pins = commentPins.map((pin) => ({
+      localPosition: { x: pin.mesh.position.x, y: pin.mesh.position.y, z: pin.mesh.position.z },
+      labelOffset: pin.labelOffset || null,
+      entries: normalizePinEntries(pin),
+      cameraPosition: { x: pin.cameraPosition.x, y: pin.cameraPosition.y, z: pin.cameraPosition.z },
+      cameraDirection: { x: pin.cameraDirection.x, y: pin.cameraDirection.y, z: pin.cameraDirection.z },
+      cameraUp: { x: pin.cameraUp.x, y: pin.cameraUp.y, z: pin.cameraUp.z },
+    }));
+
+    const state = {
+      modelKey: currentModelKey,
+      fileName: selectedFileName,
+      position: { x: placedModel.position.x, y: placedModel.position.y, z: placedModel.position.z },
+      quaternion: {
+        x: placedModel.quaternion.x,
+        y: placedModel.quaternion.y,
+        z: placedModel.quaternion.z,
+        w: placedModel.quaternion.w,
+      },
+      scale: currentScale,
+      opacity: currentOpacity,
+      colorFilters,
+      commentPins: pins,
+      // ピンの位置(localPosition)はplacedModel基準で保存されている。
+      // BIMアプリ側で素のモデル(bimModelの座標系)にピンを置き直す際、
+      // localPosition + originOffset が本来の(モデル自身の)座標になる。
+      originOffset: { x: originOffset.x, y: originOffset.y, z: originOffset.z },
+      alignRef: alignRef ? {
+        cornerLocal: { x: alignRef.cornerLocal.x, y: alignRef.cornerLocal.y, z: alignRef.cornerLocal.z },
+        edgeOtherLocal: { x: alignRef.edgeOtherLocal.x, y: alignRef.edgeOtherLocal.y, z: alignRef.edgeOtherLocal.z },
+      } : null,
+      savedAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(appStateStorageKeyFor(currentModelKey), JSON.stringify(state));
+    // 中間ファイルのダウンロードは、ここでは行わない(コメント追加のたびに
+    // 出るとブロック通知が頻発するため)。「🌐 全体確認」ボタンを押した
+    // タイミングでのみダウンロードする。
+  } catch (err) {
+    console.error('状態の保存に失敗しました', err);
+  }
+}
+
+function loadSavedAppState(modelKey) {
+  try {
+    const raw = localStorage.getItem(appStateStorageKeyFor(modelKey));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('保存データの読み込みに失敗しました', err);
+    return null;
+  }
+}
+
+function clearSavedAppState(modelKey) {
+  try {
+    localStorage.removeItem(appStateStorageKeyFor(modelKey));
+  } catch (err) {
+    // 何もしない
+  }
+}
+
+// 保存されている全モデル分の状態を一覧取得する(初期画面の一覧表示用)
+function listAllSavedAppStates() {
+  const results = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(APP_STATE_STORAGE_KEY_PREFIX)) continue;
+    const modelKey = key.slice(APP_STATE_STORAGE_KEY_PREFIX.length);
+    try {
+      const state = JSON.parse(localStorage.getItem(key));
+      results.push({ modelKey, state });
+    } catch (err) {
+      // 壊れたデータはスキップ
+    }
+  }
+  // 更新日時が新しい順
+  results.sort((a, b) => (a.state.savedAt < b.state.savedAt ? 1 : -1));
+  return results;
+}
+
+// 保存されていた状態(位置・向き・拡大率・コメントピン)を配置済みモデルに適用する
+function applySavedAppState(state) {
+  if (!placedModel || !state) return;
+
+  alignRef = null;
+  if (state.alignRef && state.alignRef.cornerLocal && state.alignRef.edgeOtherLocal) {
+    const c = state.alignRef.cornerLocal, e = state.alignRef.edgeOtherLocal;
+    alignRef = {
+      cornerLocal: new THREE.Vector3(c.x, c.y, c.z),
+      edgeOtherLocal: new THREE.Vector3(e.x, e.y, e.z),
+    };
+  }
+  placedModel.position.set(state.position.x, state.position.y, state.position.z);
+  placedModel.quaternion.set(
+    state.quaternion.x,
+    state.quaternion.y,
+    state.quaternion.z,
+    state.quaternion.w
+  );
+
+  if (typeof state.scale === 'number') {
+    currentScale = state.scale;
+    placedModel.scale.setScalar(currentScale);
+  }
+  if (typeof state.opacity === 'number') {
+    currentOpacity = state.opacity;
+    const opacityPercent = Math.round(currentOpacity * 100);
+    opacitySlider.value = opacityPercent;
+    opacityValueLabel.textContent = `${opacityPercent}%`;
+  }
+  if (state.colorFilters) {
+    Object.entries(state.colorFilters).forEach(([hex, enabled]) => {
+      const group = colorGroups.get(hex);
+      if (group) {
+        group.enabled = enabled;
+        group.materials.forEach((mat) => {
+          mat.userData.transparencyExcluded = !enabled;
+        });
+      }
+    });
+    renderColorFilterList();
+  }
+  applyOpacity(placedModel, currentOpacity);
+
+  if (Array.isArray(state.commentPins)) {
+    state.commentPins.forEach((pinData) => {
+      const pinMesh = createPinMesh();
+      pinMesh.position.set(pinData.localPosition.x, pinData.localPosition.y, pinData.localPosition.z);
+      placedModel.add(pinMesh);
+      commentPins.push({
+        mesh: pinMesh,
+        entries: normalizePinEntries(pinData),
+        labelOffset: pinData.labelOffset || null,
+        cameraPosition: new THREE.Vector3(
+          pinData.cameraPosition.x,
+          pinData.cameraPosition.y,
+          pinData.cameraPosition.z
+        ),
+        cameraDirection: new THREE.Vector3(
+          pinData.cameraDirection.x,
+          pinData.cameraDirection.y,
+          pinData.cameraDirection.z
+        ),
+        cameraUp: new THREE.Vector3(pinData.cameraUp.x, pinData.cameraUp.y, pinData.cameraUp.z),
+      });
+    });
+  }
+}
+
+function updateGridLabels() {
+  if (!placedModel || !modelMesh || gridLabelsData.length === 0 || !gridLabelsVisible) return;
+  const projCamera = (confirmViewActive && pointAlignCamera) ? pointAlignCamera : camera;
+
+  const halfWidth = window.innerWidth / 2;
+  const halfHeight = window.innerHeight / 2;
+  const tempVec = new THREE.Vector3();
+
+  gridLabelsData.forEach((label, i) => {
+    let el = gridLabelElements[i];
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'grid-label';
+      el.textContent = label.tag;
+      gridLabelsContainer.appendChild(el);
+      gridLabelElements[i] = el;
+    }
+
+    tempVec.copy(label.position);
+    modelMesh.localToWorld(tempVec);
+    tempVec.project(projCamera);
+
+    if (tempVec.z > 1 || tempVec.z < -1) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = 'flex';
+    el.style.left = `${tempVec.x * halfWidth + halfWidth}px`;
+    el.style.top = `${-tempVec.y * halfHeight + halfHeight}px`;
+  });
+}
+
+// 新しいコメントピン(小さな球)を作成し、placedModelの子として追加する。
+// 子として追加することで、モデルの移動・回転・拡大縮小に自動で追従する。
+function createPinMesh() {
+  const pinGeometry = new THREE.SphereGeometry(0.025, 12, 12);
+  const pinMaterial = new THREE.MeshBasicMaterial({ color: 0xffeb3b });
+  const pinMesh = new THREE.Mesh(pinGeometry, pinMaterial);
+  pinMesh.userData.isCommentPin = true;
+  return pinMesh;
+}
+
+function addCommentPin(worldPoint, text, imageDataUrl) {
+  placedModel.updateMatrixWorld(true);
+  const pinMesh = createPinMesh();
+  pinMesh.position.copy(placedModel.worldToLocal(worldPoint.clone()));
+  placedModel.add(pinMesh);
+
+  // BCF出力用に、コメント作成時点のカメラ視点(ワールド座標)を記録しておく。
+  // (後で書き出すときではなく、タップした「その瞬間」の視点を残すため)
+  const cameraPosition = new THREE.Vector3();
+  camera.getWorldPosition(cameraPosition);
+  const cameraDirection = new THREE.Vector3();
+  camera.getWorldDirection(cameraDirection);
+  const cameraWorldQuat = new THREE.Quaternion();
+  camera.getWorldQuaternion(cameraWorldQuat);
+  const cameraUp = camera.up.clone().applyQuaternion(cameraWorldQuat);
+
+  // 注: 以前はここでrenderer.domElement.toDataURL()によるスクリーンショット取得も
+  // 行っていたが、AR(WebXR)セッション中にこれを呼ぶと機種によってはセッションが
+  // 不安定になり、コメント確定と同時に初期画面へ戻ってしまう不具合が起きたため削除した。
+  // (window.prompt()と同様、AR中のcanvas読み取り系の処理は要注意)
+  // 代わりに、スマホの標準スクショ機能で撮った画像を、ユーザーが手動で選んで
+  // 添付する形にしている(image引数、任意)。
+
+  commentPins.push({
+    mesh: pinMesh,
+    entries: [{
+      createdAt: new Date().toISOString(),
+      text,
+      image: imageDataUrl || null,
+      locked: false,
+    }],
+    cameraPosition,
+    cameraDirection,
+    cameraUp,
+  });
+}
+
+// 音声でコメントを取得する。キーボードは一切使わない
+// (AR中にソフトウェアキーボードを開閉すると、この端末ではWebXRセッションが
+// 終了してしまう不具合が確認されたため、テキスト入力欄を使わない設計にしている)。
+// 戻り値: 確定した文字列、またはキャンセル時null
+function captureVoiceComment() {
+  return new Promise((resolve) => {
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      // 音声認識に非対応の環境向けの最終手段。
+      // 注意: これはキーボードを使うため、AR中は前述の不具合が起きる可能性がある。
+      const text = window.prompt('この端末は音声入力に対応していません。コメントを入力してください', '');
+      resolve(text && text.trim() ? text : null);
+      return;
+    }
+
+    voiceModalStatus.textContent = '🎤 話してください…';
+    voiceModalTranscript.textContent = '';
+    voiceModalOkBtn.style.display = 'none';
+    voiceModalRetryBtn.style.display = 'none';
+    voiceModalOverlay.style.display = 'flex';
+
+    let finalText = '';
+    const recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onresult = (event) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += transcript;
+        } else {
+          interim += transcript;
+        }
+      }
+      voiceModalTranscript.textContent = finalText + interim;
+    };
+
+    recognition.onerror = (event) => {
+      voiceModalStatus.textContent = `⚠ 音声認識エラー: ${event.error}(もう一度お試しください)`;
+      voiceModalRetryBtn.style.display = 'inline-block';
+    };
+
+    recognition.onend = () => {
+      voiceModalStatus.textContent = finalText ? '認識結果:' : '(認識できませんでした)';
+      voiceModalOkBtn.style.display = 'inline-block';
+      voiceModalRetryBtn.style.display = 'inline-block';
+    };
+
+    function cleanup() {
+      voiceModalOverlay.style.display = 'none';
+      voiceModalOkBtn.removeEventListener('click', onOk);
+      voiceModalRetryBtn.removeEventListener('click', onRetry);
+      voiceModalCancelBtn.removeEventListener('click', onCancel);
+    }
+    function onOk() {
+      cleanup();
+      resolve(finalText.trim() || null);
+    }
+    function onRetry() {
+      finalText = '';
+      voiceModalTranscript.textContent = '';
+      voiceModalStatus.textContent = '🎤 話してください…';
+      voiceModalOkBtn.style.display = 'none';
+      voiceModalRetryBtn.style.display = 'none';
+      try {
+        recognition.start();
+      } catch (err) {
+        voiceModalStatus.textContent = '⚠ 音声認識を開始できませんでした';
+      }
+    }
+    function onCancel() {
+      try {
+        recognition.abort();
+      } catch (err) {
+        // 何もしない
+      }
+      cleanup();
+      resolve(null);
+    }
+
+    voiceModalOkBtn.addEventListener('click', onOk);
+    voiceModalRetryBtn.addEventListener('click', onRetry);
+    voiceModalCancelBtn.addEventListener('click', onCancel);
+
+    try {
+      recognition.start();
+    } catch (err) {
+      voiceModalStatus.textContent = '⚠ 音声認識を開始できませんでした';
+      voiceModalRetryBtn.style.display = 'inline-block';
+    }
+  });
+}
+
+// キーボードでコメントを取得する。
+// 注意: AR中にソフトウェアキーボードを開閉すると、この端末ではWebXRセッションが
+// 終了することが確認済み。これはブラウザの仕様上避けられないため、代わりに
+// セッションが切れても状態を復元できる仕組み(saveAppState/loadSavedAppState)を
+// 別途用意している。
+// 戻り値: 確定した文字列、またはnull(キャンセル/空欄)
+function captureKeyboardComment(initialValue) {
+  return new Promise((resolve) => {
+    keyboardModalInput.value = initialValue || '';
+    keyboardModalOverlay.style.display = 'flex';
+    keyboardModalInput.focus();
+
+    function cleanup() {
+      keyboardModalOverlay.style.display = 'none';
+      keyboardModalOkBtn.removeEventListener('click', onOk);
+      keyboardModalCancelBtn.removeEventListener('click', onCancel);
+    }
+    function onOk() {
+      const value = keyboardModalInput.value.trim();
+      cleanup();
+      resolve(value || null);
+    }
+    function onCancel() {
+      cleanup();
+      resolve(null);
+    }
+    keyboardModalOkBtn.addEventListener('click', onOk);
+    keyboardModalCancelBtn.addEventListener('click', onCancel);
+  });
+}
+
+// コメント保存後、画像(スマホのスクショ等)を任意で添付するか尋ねる。
+// 「画像を選択」を押すとOS標準の画像選択(カメラ/カメラロール)が開く。
+// 注意: これはキーボードと同種のOSネイティブUIのため、AR中に開くと
+// セッションが不安定になる可能性がある(未検証)。
+// 戻り値: 選択した画像のdata URL、またはnull(スキップ/未選択)
+function askAttachImage() {
+  return new Promise((resolve) => {
+    imageAttachOverlay.style.display = 'flex';
+
+    function cleanup() {
+      imageAttachOverlay.style.display = 'none';
+      imageAttachSkipBtn.removeEventListener('click', onSkip);
+      imageAttachChooseBtn.removeEventListener('click', onChoose);
+    }
+    function onSkip() {
+      cleanup();
+      resolve(null);
+    }
+    function onChoose() {
+      cleanup();
+      pinImageInput.value = ''; // 同じ画像を続けて選び直せるようリセットしておく
+      pinImageInput.onchange = (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        // 元ファイルをそのままbase64化すると、スマホのカメラ写真は
+        // 数MBになることがあり変換に時間がかかる。セッションが切れるまでの
+        // 短い時間内に確実に完了させるため、縮小・軽量化してから使う。
+        downscaleImageFile(file, 800)
+          .then(resolve)
+          .catch(() => resolve(null));
+      };
+      pinImageInput.click();
+    }
+    imageAttachSkipBtn.addEventListener('click', onSkip);
+    imageAttachChooseBtn.addEventListener('click', onChoose);
+  });
+}
+
+// 画像を指定した最大幅に縮小し、軽量なJPEGのdata URLとして返す。
+// FileReaderで元ファイル全体をbase64化するより高速(小さいデータしか
+// 扱わないため)。
+function downscaleImageFile(file, maxWidth) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(objectUrl);
+      resolve(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(objectUrl);
+      reject(err);
+    };
+    img.src = objectUrl;
+  });
+}
+
+// コメントentryの表示色(交互に使い、書いた人・タイミングが変わったことを見分けやすくする)
+const COMMENT_ENTRY_COLORS = ['#42a5f5', '#ffa726', '#66bb6a', '#ab47bc', '#ef5350', '#26c6da'];
+
+// 古い形式(text/imageを1つだけ持つ)のピンデータを、entries配列形式に変換する。
+// 既にentries形式ならそのまま返す(locked未設定はfalse扱いにする)。
+function normalizePinEntries(pinData) {
+  if (Array.isArray(pinData.entries)) {
+    return pinData.entries.map((e) => ({ ...e, locked: e.locked === true }));
+  }
+  return [{
+    createdAt: pinData.createdAt || new Date().toISOString(),
+    text: pinData.text || '',
+    image: pinData.image || null,
+    locked: false,
+  }];
+}
+
+function formatEntryDate(iso) {
+  try {
+    return new Date(iso).toLocaleString('ja-JP', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+    });
+  } catch (err) {
+    return '';
+  }
+}
+
+// entries配列を、色分けされたカードとしてcontainer内に描画する(閲覧専用)。
+// textContentのみ使い、innerHTMLでの文字列組み立ては行わない(安全のため)。
+function renderEntriesInto(container, entries, onAddImage) {
+  container.innerHTML = '';
+  entries.forEach((entry, i) => {
+    const card = document.createElement('div');
+    card.className = 'comment-entry-card';
+    card.style.borderLeftColor = COMMENT_ENTRY_COLORS[i % COMMENT_ENTRY_COLORS.length];
+
+    const meta = document.createElement('div');
+    meta.className = 'comment-entry-meta';
+    meta.textContent = formatEntryDate(entry.createdAt);
+    card.appendChild(meta);
+
+    const body = document.createElement('div');
+    body.className = 'comment-entry-body';
+    body.textContent = entry.text || '';
+    card.appendChild(body);
+
+    if (entry.image) {
+      const img = document.createElement('img');
+      img.className = 'comment-entry-image';
+      img.src = entry.image;
+      card.appendChild(img);
+    }
+    // 写真の追加・変更ができる(ロック済みのコメントは、写真が未添付の場合だけ追加可)
+    if (onAddImage && (!entry.locked || !entry.image)) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = entry.image ? '🖼 画像を変更' : '🖼 画像を追加';
+      btn.style.cssText = 'margin-top:6px;padding:6px 10px;border:none;border-radius:6px;background:#6a1b9a;color:#fff;font-size:12px;';
+      btn.addEventListener('click', () => onAddImage(i));
+      card.appendChild(btn);
+    }
+    container.appendChild(card);
+  });
+}
+
+// 既存ピンをタップした時の、コメントスレッド閲覧。現場で作ったコメントには写真を追加・変更できる
+// (JSONから取り込んだ分はロックされていて閲覧のみ。テキストの追記・編集・削除はBIM表示アプリ側で行う)
+function showPinThreadView(pin) {
+  pin.entries = normalizePinEntries(pin);
+  const render = () => {
+    renderEntriesInto(pinActionText, pin.entries, (index) => {
+      pinImageInput.value = '';
+      pinImageInput.onchange = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        downscaleImageFile(file, 800).then((dataUrl) => {
+          pin.entries[index].image = dataUrl;
+          saveAppState();
+          render();
+        }).catch(() => {});
+      };
+      pinImageInput.click();
+    });
+  };
+  render();
+  pinActionOverlay.style.display = 'flex';
+}
+pinActionCloseBtn.addEventListener('click', () => {
+  pinActionOverlay.style.display = 'none';
+});
+
+
+// 対象のオブジェクト(またはその親)が、コメント配置のレイキャストから除外すべき
+// もの(通り芯、または輪郭線)かどうかを判定する。
+function isGridLineObject(object) {
+  let node = object;
+  while (node) {
+    if (node.userData && (node.userData.isGridLineTube || node.userData.isEdgeOutline)) return true;
+    if (node.name === 'GridLines') return true;
+    node = node.parent;
+  }
+  return false;
+}
+
+// 白い輪郭線を、線分ごとにその線に垂直な方向へ少しずらして複製することで、
+// 実質1pxの制約(linewidthがブラウザに無視される問題)を受けずに、
+// 疑似的に太く見せる。Fat Lines(LineSegments2)・チューブ(円柱メッシュ)は
+// どちらも不具合(スマホでのフリーズ、重なった箇所が目立ちすぎる)が
+// あったため、最も枯れた「同じ線を少しずらして重ねる」方式にした。
+// (isMeshにならない普通のLineSegmentsのままなので、他の「メッシュだけを
+//  対象にする」処理に紛れ込む心配もない)
+const EDGE_OUTLINE_THICKEN_OFFSET = 0.01;
+
+function thickenLineSegments(lineSegmentsObject, offset = EDGE_OUTLINE_THICKEN_OFFSET) {
+  const posAttr = lineSegmentsObject.geometry.attributes.position;
+  const segmentCount = posAttr.count / 2;
+
+  const p1 = new THREE.Vector3();
+  const p2 = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  const perp1 = new THREE.Vector3();
+  const perp2 = new THREE.Vector3();
+  const referenceUp = new THREE.Vector3(0, 1, 0);
+  const referenceSide = new THREE.Vector3(1, 0, 0);
+
+  const positions = [];
+
+  for (let i = 0; i < segmentCount; i++) {
+    p1.fromBufferAttribute(posAttr, i * 2);
+    p2.fromBufferAttribute(posAttr, i * 2 + 1);
+    dir.subVectors(p2, p1);
+    if (dir.lengthSq() < 1e-12) continue;
+    dir.normalize();
+
+    // 線の向きとほぼ平行な基準ベクトルだと外積が破綻するので、
+    // 線の向きに応じて安全な方の基準ベクトルを選ぶ(円弧を近似する
+    // 細かい線分1本1本についても、線分ごとに個別に計算しているので、
+    // 向きに関わらず正しく処理できる)
+    const reference = Math.abs(dir.dot(referenceUp)) > 0.9 ? referenceSide : referenceUp;
+    perp1.crossVectors(dir, reference).normalize();
+    perp2.crossVectors(dir, perp1).normalize();
+
+    [perp1, perp2].forEach((perp) => {
+      [1, -1].forEach((sign) => {
+        positions.push(
+          p1.x + perp.x * offset * sign, p1.y + perp.y * offset * sign, p1.z + perp.z * offset * sign,
+          p2.x + perp.x * offset * sign, p2.y + perp.y * offset * sign, p2.z + perp.z * offset * sign
+        );
+      });
+    });
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  // 同じマテリアルを使い回すことで、色・表示状態の変更がそのまま反映される
+  const thickened = new THREE.LineSegments(geometry, lineSegmentsObject.material);
+  thickened.userData.isEdgeOutline = true;
+  // 子として追加することで、表示/非表示の切り替え(親のvisible)を
+  // そのまま引き継がせる
+  lineSegmentsObject.add(thickened);
+  return thickened;
+}
+
+// モデル内の各メッシュに、面同士のなす角度が一定以上(=本当の稜線)の場所だけ
+// 白い輪郭線を重ねる。平らな面の中の三角形分割線は無視される。
+// 通り芯(細い線材)には輪郭線をつけても意味が無いので除外する。
+function addEdgeOutlines(root, thresholdAngleDeg = 15) {
+  const targets = [];
+  root.traverse((obj) => {
+    if (obj.isMesh && obj.geometry && !isGridLineObject(obj)) {
+      targets.push(obj);
+    }
+  });
+
+  targets.forEach((mesh) => {
+    // 輪郭線とメッシュ面のz-fightingを防ぐため、メッシュ側を少し奥に押しやる
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    materials.forEach((mat) => {
+      if (!mat) return;
+      mat.polygonOffset = true;
+      mat.polygonOffsetFactor = 1;
+      mat.polygonOffsetUnits = 1;
+    });
+
+    const edgesGeometry = new THREE.EdgesGeometry(mesh.geometry, thresholdAngleDeg);
+    const edgesMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const edgeLines = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+    // 「メッシュだけを対象にする」他の処理から必ず除外するためのフラグ
+    // (コメント配置のレイキャスト、透過設定、色フィルター、位置決め
+    //  プレビュー生成など、複数箇所でこのフラグを見て除外している)
+    edgeLines.userData.isEdgeOutline = true;
+    // 透過(半透明)になっているメッシュにだけ輪郭を見せたいので、
+    // 初期状態(不透明)では隠しておき、applyOpacity側で透過中だけ表示する
+    edgeLines.visible = false;
+    // メッシュの子として追加することで、メッシュ自身の位置・回転・拡大率
+    // (=すでに正しく配置されている変換)をそのまま引き継がせる
+    mesh.add(edgeLines);
+    mesh.userData.edgeOutline = edgeLines;
+
+    // 元の線に加えて、垂直方向に少しずらした4本を重ねて太く見せる
+    thickenLineSegments(edgeLines);
+  });
+}
+
+// コメント追加モード中はタップで新規追加・編集・削除ができ、
+// モードOFF中でも、既存ピンをタップすればコメントの閲覧だけはできる。
+// (renderer生成後でないとdomElementが存在しないため、init()内から呼び出す)
+// タップ位置からモデル表面(既存ピン・通り芯以外)への交点を計算する
+function raycastModelPoint(clientX, clientY) {
+  const ndc = new THREE.Vector2(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1
+  );
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObject(placedModel, true);
+  const hit = hits.find((h) => !h.object.userData.isCommentPin && !isGridLineObject(h.object));
+  return hit ? hit.point : null;
+}
+
+let pendingPinPreview = null; // ドラッグ調整中の仮ピン(まだcommentPinsには入れない)
+let isDraggingNewPin = false;
+
+// タップした指でピンが隠れないよう、少し上にずらした位置を「ピンの正解座標」
+// として保存する。3D空間で単純に上へずらすと、面の向きによってはメッシュから
+// 浮いて見えてしまうため、代わりに画面上で少し上の位置に対して再度レイキャスト
+// し、そこでヒットした地点(=必ずメッシュ上の点)を使う。
+const PIN_SCREEN_OFFSET_PX = 60;
+
+// タップ位置と、そこから画面上で少し上の位置の両方でレイキャストし、
+// 上側でもヒットしていればそちらを「ピンの正解座標」として採用する。
+function raycastPinPoint(clientX, clientY) {
+  const basePoint = raycastModelPoint(clientX, clientY);
+  if (!basePoint) return null;
+  const shiftedPoint = raycastModelPoint(clientX, clientY - PIN_SCREEN_OFFSET_PX);
+  return shiftedPoint || basePoint;
+}
+
+function setupCommentPinInteraction() {
+  renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (!placedModel) return;
+
+    // 「2点合わせ」「点で合わせる」モード中は、通常のピン配置とは
+    // 別処理に回す(専用の確定ボタンを使うため。「点で合わせる」中は
+    // BIM専用ビュー(step1)か、AR画面へのタップを無視するstep2のどちらか)
+    if (orientationAlignStep > 0) return;
+    if (pointAlignStep > 0) return;
+
+    const ndc = new THREE.Vector2(
+      (event.clientX / window.innerWidth) * 2 - 1,
+      -(event.clientY / window.innerHeight) * 2 + 1
+    );
+    raycaster.setFromCamera(ndc, camera);
+
+    // 既存ピンをタップした場合は、コメントスレッドを閲覧専用で開く
+    // (追記・編集・削除はBIM表示アプリ側で行う運用のため、ここでは表示のみ)
+    const pinMeshes = commentPins.map((p) => p.mesh);
+    const pinHits = pinMeshes.length > 0 ? raycaster.intersectObjects(pinMeshes, true) : [];
+    if (pinHits.length > 0) {
+      const hitPin = commentPins.find((p) => p.mesh === pinHits[0].object);
+      if (hitPin) showPinThreadView(hitPin);
+      return;
+    }
+
+    // ここから先(新規ピン追加)は、コメント追加モードON中のみ有効
+    if (!commentModeActive) return;
+
+    const point = raycastPinPoint(event.clientX, event.clientY);
+    if (!point) return;
+
+    // タップした瞬間は確定せず、指を離すまでスライドして位置調整できる
+    // 仮ピンを表示する(タップ精度のズレを、その場で微調整できるようにするため)
+    pendingPinPreview = createPinMesh();
+    pendingPinPreview.position.copy(placedModel.worldToLocal(point.clone()));
+    placedModel.add(pendingPinPreview);
+    isDraggingNewPin = true;
+  });
+
+  renderer.domElement.addEventListener('pointermove', (event) => {
+    if (!isDraggingNewPin || !pendingPinPreview || !placedModel) return;
+    const point = raycastPinPoint(event.clientX, event.clientY);
+    if (point) {
+      pendingPinPreview.position.copy(placedModel.worldToLocal(point.clone()));
+    }
+  });
+
+  renderer.domElement.addEventListener('pointerup', (event) => {
+    if (!isDraggingNewPin || !pendingPinPreview || !placedModel) return;
+    isDraggingNewPin = false;
+
+    // ドラッグ中に表示していた位置(=メッシュ上の点)を、そのまま保存位置とする
+    const finalLocalPos = pendingPinPreview.position.clone();
+    placedModel.remove(pendingPinPreview);
+    pendingPinPreview = null;
+
+    // 1件分の配置操作が終わったら、誤って連続で追加されないよう自動でモードをOFFに戻す
+    setCommentModeActive(false);
+
+    const worldPos = placedModel.localToWorld(finalLocalPos.clone());
+    captureKeyboardComment('').then((text) => {
+      if (!text) return;
+      // 画像添付はAR中に行わない(BIM表示アプリ側で安全に行えるようになったため)。
+      // テキストのみ保存する。
+      addCommentPin(worldPos, text, null);
+      saveAppState();
+    });
+  });
+}
+
+// ARセッションを自分で開始する(ARButtonのUIは使わず、直接WebXR APIを呼ぶ)
+async function startARSession() {
+  if (!navigator.xr) {
+    fileLabel.textContent = 'このブラウザはARに対応していません';
+    return;
+  }
+  try {
+    const session = await navigator.xr.requestSession('immersive-ar', {
+      optionalFeatures: ['dom-overlay', 'depth-sensing'],
+      domOverlay: { root: document.body },
+      depthSensing: {
+        usagePreference: ['cpu-optimized'],
+        dataFormatPreference: ['luminance-alpha', 'float32'],
+      },
+    });
+    // 実際にDepth Sensingが有効になったか、どの形式で提供されるかを
+    // 記録しておく(「点で合わせる」で深度が取れない時の切り分け用)
+    arDepthUsage = session.depthUsage || null;
+    arDepthDataFormat = session.depthDataFormat || null;
+    // Three.jsは既定で「local-floor」という特殊な基準空間を要求しようとするが、
+    // これは明示的にリクエストしないと使えないことがあるため、
+    // より基本的で対応の広い「local」を明示的に指定する。
+    renderer.xr.setReferenceSpaceType('local');
+    await renderer.xr.setSession(session);
+  } catch (err) {
+    console.error('ARセッションの開始に失敗しました', err);
+    fileLabel.textContent = `AR開始失敗: ${err.name || ''} ${err.message || err}`;
+    // 自動開始に失敗した場合のフォールバック。
+    // これは新規のユーザー操作(ボタンクリック)なので、ブラウザの制約に必ず適合する。
+    manualArStartBtn.style.display = 'block';
+  }
+}
+
+manualArStartBtn.addEventListener('click', () => {
+  manualArStartBtn.style.display = 'none';
+  startARSession();
+});
+
+// 初期化ボタン: ページを丸ごとリロードして最初の状態に戻す
+const resetConfirmOverlay = document.getElementById('reset-confirm-overlay');
+const resetConfirmOkBtn = document.getElementById('reset-confirm-ok');
+const resetConfirmCancelBtn = document.getElementById('reset-confirm-cancel');
+
+resetButton.addEventListener('click', () => {
+  // 誤って触れてしまうことがあるため、確認を挟んでから初期化する
+  resetConfirmOverlay.style.display = 'flex';
+});
+resetConfirmCancelBtn.addEventListener('click', () => {
+  resetConfirmOverlay.style.display = 'none';
+});
+resetConfirmOkBtn.addEventListener('click', () => {
+  // 「初期化」は意図的な最初からのやり直しなので、保存データも消す
+  clearSavedAppState();
+  location.reload();
+});
+
+// 初期画面・横向き案内画面に、このHTMLファイル自体の最終更新日時を表示する。
+// (サーバーにアップロードした日時をブラウザが自動的に読み取ってくれるため、
+//  手動でバージョン番号を管理する必要がない)
+function formatLastModified() {
+  const date = new Date(document.lastModified);
+  if (isNaN(date.getTime())) {
+    return `アップデート：${document.lastModified}`;
+  }
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `アップデート：${y}年${m}月${d}日 ${hh}:${mm}`;
+}
+const lastModifiedText = formatLastModified();
+document.getElementById('file-last-modified').textContent = lastModifiedText;
+
+// 中間ファイル(BIM表示アプリ側で書き出したJSON)を読み込み、
+// 保存データ(localStorage)に反映する。これにより、BIMアプリ側で
+// 追加された画像・コメントを、ARアプリ側でも続きから使えるようになる。
+// data URL(base64)を、そのままFileオブジェクトに戻すヘルパー
+function dataUrlToFile(dataUrl, fileName) {
+  const [header, base64Data] = dataUrl.split(',');
+  const mimeMatch = header.match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+  const binary = atob(base64Data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new File([bytes], fileName, { type: mime });
+}
+
+document.getElementById('intermediate-file-input').addEventListener('change', (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const state = JSON.parse(reader.result);
+      if (!state || !state.fileName) {
+        alert('JSONファイルの形式が正しくないようです');
+        return;
+      }
+      // 古い形式の中間ファイル(modelKeyを持たない)にも一応対応しておく
+      const modelKey = state.modelKey || computeModelKey(state.fileName, 0);
+
+      // モデル本体が埋め込まれていれば、IndexedDBキャッシュに復元しておく。
+      // (これで「モデルファイルを選び直す」手間がなくなり、
+      //  中間ファイル1つだけで別端末でも復元できる)
+      let modelIncluded = false;
+      if (state.modelFileBase64) {
+        const modelFile = dataUrlToFile(state.modelFileBase64, state.fileName);
+        await cacheModelFile(modelKey, modelFile);
+        modelIncluded = true;
+        delete state.modelFileBase64; // localStorageを圧迫しないよう、保存前に取り除く
+      }
+
+      // 古い形式のピンをentries形式に変換したうえで、JSONから読み込んだ
+      // 時点の全entryを「ロック」する(書き間違い修正のため、追記前の内容は
+      // 編集・削除できないようにする。ロックはBIM表示アプリ側の表示で使う)
+      if (Array.isArray(state.commentPins)) {
+        state.commentPins.forEach((pinData) => {
+          const entries = normalizePinEntries(pinData).map((e) => ({ ...e, locked: true }));
+          pinData.entries = entries;
+          delete pinData.text;
+          delete pinData.image;
+        });
+      }
+
+      localStorage.setItem(appStateStorageKeyFor(modelKey), JSON.stringify(state));
+      alert(
+        modelIncluded
+          ? `「${state.fileName}」をモデルごと読み込みました。\n一覧の「続きから再開」からすぐに開けます。`
+          : `「${state.fileName}」のJSONファイルを読み込みました。\nモデルファイルを選択すると復元されます。`
+      );
+      location.reload();
+    } catch (err) {
+      alert('JSONファイルの読み込みに失敗しました');
+    }
+  };
+  reader.readAsText(file);
+});
+
+init();
+animate();
+
+function init() {
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(
+    70,
+    window.innerWidth / window.innerHeight,
+    0.01,
+    20
+  );
+
+  const light = new THREE.HemisphereLight(0xffffff, 0x666666, 1.5);
+  light.position.set(0.5, 1, 0.25);
+  scene.add(light);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  // touch-actionを指定しないと、指をスライドさせた際にブラウザ側が
+  // 「スクロール操作だ」と判断し、0.3〜0.5秒ほどでタッチイベントの配信を
+  // 打ち切ってしまう(ピンのドラッグ調整が途中で止まる不具合の原因)。
+  renderer.domElement.style.touchAction = 'none';
+  document.body.appendChild(renderer.domElement);
+
+  // ARセッション中は操作ボタンを表示し、選択UIは隠す
+  renderer.xr.addEventListener('sessionstart', () => {
+    rightGroup.style.display = 'flex';
+    topRightButtons.style.display = 'flex';
+    opacityControl.style.display = 'flex';
+    filePicker.style.display = 'none';
+    modelNameLabel.textContent = selectedFileName.replace(/\.(glb|gltf)$/i, '');
+    modelNameLabel.style.display = 'block';
+    saveRecordButton.style.display = 'block';
+    commentPinButton.style.display = 'block';
+    commentLabelsToggle.style.display = 'block';
+    confirmViewButton.style.display = 'block';
+    positionToggleButton.textContent = '位置決め';
+    positionToggleButton.classList.remove('active');
+
+    // 再開(緑ボタン、またはオレンジの案内から同じファイルを選び直した)場合は、
+    // 位置決め・透過のパネルを最初から閉じた状態にする。
+    // 初回の通常起動時は、今まで通り開いた状態のまま。
+    if (isResumedSession) {
+      rightGroup.classList.add('collapsed');
+      opacityControl.classList.add('collapsed');
+    }
+
+  });
+
+  // ARが終了したら(Chrome標準の終了操作など)、ページを丸ごとリロードして
+  // 最初の状態に戻す。初期化ボタンを押した場合と同じ結果になる。
+  renderer.xr.addEventListener('sessionend', () => {
+    location.reload();
+  });
+
+  window.addEventListener('resize', onWindowResize);
+
+  // ボタン操作(配置後のモデルを移動・高さ調整・回転する)
+  setupArControlButtons();
+  setupOpacitySlider();
+  setupGridLineControls();
+  setupPositionSetting();
+  setupElevationDrag();
+  setupCommentPinInteraction();
+}
+
+// =====================================================
+// 位置決め機能
+// =====================================================
+function setupPositionSetting() {
+  positionToggleButton.addEventListener('click', () => {
+    if (heightAlignmentActive) {
+      finishHeightAlignment();
+    } else if (positionSettingActive) {
+      startHeightAlignment();
+    } else {
+      startPositionSetting();
+    }
+  });
+
+  orientationAlignButton.addEventListener('click', () => {
+    if (orientationAlignStep > 0) {
+      cancelOrientationAlign();
+    } else {
+      startOrientationAlign();
+    }
+  });
+}
+
+function startPositionSetting() {
+  if (!placedModel) return;
+  positionSettingActive = true;
+  positionToggleButton.textContent = '決定';
+  positionToggleButton.classList.add('active');
+  psBanner.style.display = 'block';
+  psCanvasWrap.style.display = 'block';
+  // 従来の位置決め中は、他の位置合わせ方法を同時に開始できないようにする
+  orientationAlignButton.disabled = true;
+  pointAlignButton.disabled = true;
+  confirmViewButton.disabled = true;
+
+  // その時点でのスマホの位置・向きを「基準(不動)」として固定する。
+  // これ以降、実際にスマホが動いても、この位置決め画面内の見え方は変わらない。
+  const frozenPos = new THREE.Vector3();
+  camera.getWorldPosition(frozenPos);
+  const frozenForward = getCameraForwardXZ();
+
+  // 手ブレなどでスマホの向きがわずかに斜めだと、表示が傾いてしまうため、
+  // 視点方向を最も近いX軸・Z軸方向にスナップし、画面に水平・垂直に表示されるようにする
+  const snappedForward = snapToNearestAxis(frozenForward);
+  // 続く高さ調整(立面図)で、この「前方向」に対して真横(90度)から見るために使う
+  positionSettingForward = snappedForward.clone();
+
+  // 上面図(2D)プレビュー用の、専用の小さなシーン・レンダラー・カメラを用意する
+  psScene = new THREE.Scene();
+  psPreviewModel = buildFlatPreviewModel(placedModel);
+  psScene.add(psPreviewModel);
+
+  const canvas = document.createElement('canvas');
+  const pixelRatio = window.devicePixelRatio || 1;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  canvas.width = width * pixelRatio;
+  canvas.height = height * pixelRatio;
+  psCanvasWrap.insertBefore(canvas, psCanvasWrap.firstChild);
+
+  psRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  psRenderer.setPixelRatio(pixelRatio);
+  psRenderer.setSize(width, height, false);
+
+  // 画面いっぱいに表示するため、画面の縦横比に合わせて表示範囲を決める
+  const halfSizeVertical = 4; // 上下方向に見渡す範囲(メートル)。固定。
+  const aspect = width / height;
+  const halfSizeHorizontal = halfSizeVertical * aspect;
+  psCamera = new THREE.OrthographicCamera(
+    -halfSizeHorizontal, halfSizeHorizontal, halfSizeVertical, -halfSizeVertical, 0.1, 100
+  );
+  psCamera.position.set(frozenPos.x, frozenPos.y + 20, frozenPos.z);
+  psCamera.up.set(snappedForward.x, 0, snappedForward.z);
+  psCamera.lookAt(frozenPos.x, frozenPos.y, frozenPos.z);
+  psCamera.updateProjectionMatrix();
+}
+
+// ベクトルを、+X・-X・+Z・-Zのうち最も近い方向にスナップする
+function snapToNearestAxis(vector) {
+  const candidates = [
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(-1, 0, 0),
+    new THREE.Vector3(0, 0, 1),
+    new THREE.Vector3(0, 0, -1),
+  ];
+  let best = candidates[0];
+  let bestDot = -Infinity;
+  candidates.forEach((c) => {
+    const dot = c.dot(vector);
+    if (dot > bestDot) {
+      bestDot = dot;
+      best = c;
+    }
+  });
+  return best;
+}
+
+// 影・グラデーションのない、のっぺりした表示専用のモデル複製を作る。
+// 元の色・透過設定は残しつつ、光源の影響を受けない材質(MeshBasicMaterial)に差し替える。
+// 後で毎フレーム透過設定を同期できるよう、元のマテリアルをuserDataに覚えておく。
+function buildFlatPreviewModel(source) {
+  const clone = source.clone(true);
+
+  const sourceMeshes = [];
+  source.traverse((child) => {
+    if (child.isMesh && !child.userData.isEdgeOutline) sourceMeshes.push(child);
+  });
+  const cloneMeshes = [];
+  clone.traverse((child) => {
+    if (child.isMesh && !child.userData.isEdgeOutline) cloneMeshes.push(child);
+  });
+
+  cloneMeshes.forEach((cloneMesh, i) => {
+    const sourceMesh = sourceMeshes[i];
+    const original = sourceMesh && (Array.isArray(sourceMesh.material) ? sourceMesh.material[0] : sourceMesh.material);
+    const color = original && original.color ? original.color.clone() : new THREE.Color(0x999999);
+    const flatMat = new THREE.MeshBasicMaterial({ color });
+    if (original) {
+      flatMat.transparent = original.transparent;
+      flatMat.opacity = original.opacity;
+    }
+    cloneMesh.material = flatMat;
+    cloneMesh.userData.sourceMaterial = original || null;
+
+    // 輪郭線もこのメッシュの子として複製されているが、userDataの参照は
+    // 複製前のインスタンスのままなので、複製後のものに登録し直す
+    // (透過状態に応じた表示/非表示切り替えが効くようにするため)
+    const edgeChild = cloneMesh.children.find((c) => c.userData && c.userData.isEdgeOutline);
+    cloneMesh.userData.edgeOutline = edgeChild || null;
+    if (edgeChild) {
+      edgeChild.visible = Boolean(original && original.opacity < 1) && edgeOutlineFeatureEnabled;
+    }
+  });
+
+  return clone;
+}
+
+// のっぺりプレビューの透過設定を、元のモデルの現在の透過設定に同期させる
+// (透過スライダーや色フィルターを、位置決め中に操作された場合に反映するため)
+function syncPreviewOpacity(previewModel) {
+  previewModel.traverse((child) => {
+    if (!child.isMesh || !child.userData.sourceMaterial) return;
+    child.material.transparent = child.userData.sourceMaterial.transparent;
+    child.material.opacity = child.userData.sourceMaterial.opacity;
+    child.material.needsUpdate = true;
+    if (child.userData.edgeOutline) {
+      child.userData.edgeOutline.visible = child.userData.sourceMaterial.opacity < 1 && edgeOutlineFeatureEnabled;
+    }
+  });
+}
+
+// 上から見た位置決め画面(psRenderer等)を後片付けする。
+// (「高さ調整画面に進む」時、「初期化」等どちらのタイミングでも使う)
+function teardownTopDownPreview() {
+  psBanner.style.display = 'none';
+  psCanvasWrap.style.display = 'none';
+  cancelOrientationAlign();
+
+  if (psPreviewModel) {
+    psPreviewModel.traverse((child) => {
+      // 輪郭線のマテリアルは本体(placedModel)側と共有しているため、
+      // ここで破棄すると本体の輪郭線まで消えてしまう。プレビュー専用の
+      // マテリアル(flatMat)だけを破棄する。
+      if (child.isMesh && !child.userData.isEdgeOutline && child.material) {
+        child.material.dispose();
+      }
+    });
+    psPreviewModel = null;
+  }
+  psScene = null;
+
+  if (psRenderer) {
+    psRenderer.dispose();
+    if (psRenderer.domElement.parentNode) {
+      psRenderer.domElement.parentNode.removeChild(psRenderer.domElement);
+    }
+    psRenderer = null;
+  }
+  psCamera = null;
+}
+
+// 立面図(高さ調整)画面を後片付けする
+function teardownElevationPreview() {
+  elevationBanner.style.display = 'none';
+  elevationCanvasWrap.style.display = 'none';
+  elevationReferenceLine.style.display = 'none';
+  elevationDragHandle.style.display = 'none';
+
+  if (elevationPreviewModel) {
+    elevationPreviewModel.traverse((child) => {
+      if (child.isMesh && !child.userData.isEdgeOutline && child.material) {
+        child.material.dispose();
+      }
+    });
+    elevationPreviewModel = null;
+  }
+  elevationScene = null;
+
+  if (elevationRenderer) {
+    elevationRenderer.dispose();
+    if (elevationRenderer.domElement.parentNode) {
+      elevationRenderer.domElement.parentNode.removeChild(elevationRenderer.domElement);
+    }
+    elevationRenderer = null;
+  }
+  elevationCamera = null;
+}
+
+// 上から見た位置決め(XZ)が終わり、「決定」が押されたら、続けて真横から見た
+// 立面図(高さ調整)画面に切り替える。placedModel自体はまだ確定しない。
+function startHeightAlignment() {
+  if (!placedModel) return;
+  teardownTopDownPreview();
+
+  heightAlignmentActive = true;
+  positionToggleButton.textContent = '高さ決定';
+
+  elevationBanner.style.display = 'block';
+  elevationCanvasWrap.style.display = 'block';
+  elevationReferenceLine.style.display = 'block';
+  elevationDragHandle.style.display = 'block';
+
+  // その時点でのカメラの位置を、赤い基準線の高さ(画面の縦方向の中心)として固定する
+  const frozenPos = new THREE.Vector3();
+  camera.getWorldPosition(frozenPos);
+
+  const forward = positionSettingForward || getCameraForwardXZ();
+  // 位置決めで決めた「前方向」に対して、真横(90度)の方向から見る
+  const side = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
+
+  elevationScene = new THREE.Scene();
+  elevationPreviewModel = buildFlatPreviewModel(placedModel);
+  elevationScene.add(elevationPreviewModel);
+
+  const canvas = document.createElement('canvas');
+  const pixelRatio = window.devicePixelRatio || 1;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  canvas.width = width * pixelRatio;
+  canvas.height = height * pixelRatio;
+  elevationCanvasWrap.appendChild(canvas);
+
+  elevationRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  elevationRenderer.setPixelRatio(pixelRatio);
+  elevationRenderer.setSize(width, height, false);
+
+  // 画面いっぱいに表示するため、画面の縦横比に合わせて表示範囲を決める。
+  // 上下方向(重力方向)の見渡す範囲は固定(±4m)にする(遠近法無し)。
+  const halfSizeVertical = 4;
+  const aspect = width / height;
+  const halfSizeHorizontal = halfSizeVertical * aspect;
+  elevationCamera = new THREE.OrthographicCamera(
+    -halfSizeHorizontal, halfSizeHorizontal, halfSizeVertical, -halfSizeVertical, 0.1, 100
+  );
+  // 真横(side方向)から、frozenPos(=画面中央の高さの基準)を見つめる。
+  // カメラ自体はこの後動かさない(=赤い基準線は常に画面中央に固定される)。
+  elevationCamera.position.copy(frozenPos).addScaledVector(side, 30);
+  elevationCamera.up.set(0, 1, 0);
+  elevationCamera.lookAt(frozenPos);
+  elevationCamera.updateProjectionMatrix();
+}
+
+// 立面図(高さ調整)画面で「高さ決定」が押されたら、位置決め全体を完了させる
+function finishHeightAlignment() {
+  teardownElevationPreview();
+
+  heightAlignmentActive = false;
+  positionSettingActive = false;
+  positionToggleButton.textContent = '位置決め';
+  positionToggleButton.classList.remove('active');
+  orientationAlignButton.disabled = false;
+  pointAlignButton.disabled = false;
+  confirmViewButton.disabled = false;
+
+  // 位置決めを確定したタイミングで状態を保存しておく
+  // (この後キーボード・画像選択でセッションが切れても復元できるように)
+  saveAppState();
+}
+
+// ---- 「2点合わせ」による向き(回転)自動計算 ----
+//
+// 考え方:
+// 1. 実物の壁の線上の2点をAR映像でタップする(奥行きは分からないが、
+//    カメラからその点へ向かう「向き(レイ)」は分かる)
+// 2. 「2点は同じ高さ(水平線上)にある」という前提を使うと、奥行きが
+//    分からなくても、2点を結ぶ方向(水平面上の向き)だけは計算できる
+//    (P1.y = P2.y という制約から、奥行きの"比率"が求まるため)
+// 3. BIMモデル側で、実物と対応する2点をタップし、そのローカル座標
+//    (placedModelの回転に影響されない、モデル本来の向き)から、
+//    対応するエッジの水平方向を求める
+// 4. 両者の水平方向の角度差を計算し、placedModel.rotation.yに反映する
+//    (回転角の符号は実機のthree.jsで検証済み: theta = angleLocal - angleWorld)
+
+function updateOrientationAlignBanner(text) {
+  orientationAlignBanner.textContent = text;
+  orientationAlignBanner.style.display = text ? 'block' : 'none';
+}
+
+// マーカー(oaMarker1=確定済みの1点目)の表示・位置を更新する。
+// もう一方の点は、常に画面中央の十字(oaCrosshair)なので専用のマーカーは持たない。
+let oaMarker1Pos = null;
+let oaCenterPos = null;
+
+function showOaMarker(el, x, y, colorClass) {
+  el.className = `orientation-align-marker ${colorClass}`;
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.style.display = 'block';
+  oaMarker1Pos = { x, y };
+}
+
+function hideOaMarker(el) {
+  el.style.display = 'none';
+  oaMarker1Pos = null;
+}
+
+function clearOrientationAlignMarkers() {
+  hideOaMarker(oaMarker1);
+  oaCenterPos = null;
+  oaLineSvg.style.display = 'none';
+}
+
+// 1点目と、画面中央(十字)を結ぶ点線を更新する
+function updateOaLine() {
+  if (!oaMarker1Pos || !oaCenterPos) {
+    oaLineSvg.style.display = 'none';
+    return;
+  }
+  oaLine.setAttribute('x1', oaMarker1Pos.x);
+  oaLine.setAttribute('y1', oaMarker1Pos.y);
+  oaLine.setAttribute('x2', oaCenterPos.x);
+  oaLine.setAttribute('y2', oaCenterPos.y);
+  oaLineSvg.style.display = 'block';
+}
+
+// 確認パネル(「この2点でよいですか？」)を表示する。画面全体は覆わない
+// 小さいパネルなので、確認中も点線・十字が見えたままになる。
+function showOrientationAlignConfirm(text, onYes, onNo, yesLabel, noLabel) {
+  oaConfirmText.textContent = text;
+  oaConfirmYesBtn.textContent = yesLabel || 'OK';
+  oaConfirmNoBtn.textContent = noLabel || 'やり直す';
+  oaConfirmPanel.style.display = 'block';
+  oaConfirmPointButton.style.display = 'none';
+  oaConfirmYesHandler = onYes;
+  oaConfirmNoHandler = onNo;
+}
+
+function startOrientationAlign() {
+  if (!placedModel) return;
+  orientationAlignStep = 1;
+  orientationAlignRay1 = null;
+  orientationAlignRay2 = null;
+  orientationAlignModelPoint1 = null;
+  orientationAlignLastHit = null;
+  clearOrientationAlignMarkers();
+  orientationAlignButton.classList.add('active');
+  pointAlignButton.disabled = true;
+  confirmViewButton.disabled = true;
+  positionToggleButton.disabled = true;
+  // 実物の点を狙う間は、BIMが邪魔にならないよう一時的に隠す
+  placedModel.visible = false;
+  oaCrosshair.style.display = 'block';
+  oaConfirmPointButton.style.display = 'block';
+  oaConfirmPointButton.disabled = false;
+  updateOrientationAlignBanner('① 実物の壁の線上の点(1つ目)に画面中央の十字を合わせて「確定」');
+}
+
+function cancelOrientationAlign() {
+  orientationAlignStep = 0;
+  orientationAlignRay1 = null;
+  orientationAlignRay2 = null;
+  orientationAlignModelPoint1 = null;
+  orientationAlignLastHit = null;
+  orientationAlignButton.classList.remove('active');
+  pointAlignButton.disabled = false;
+  confirmViewButton.disabled = false;
+  positionToggleButton.disabled = false;
+  updateOrientationAlignBanner('');
+  clearOrientationAlignMarkers();
+  oaCrosshair.style.display = 'none';
+  oaConfirmPointButton.style.display = 'none';
+  oaConfirmPanel.style.display = 'none';
+  // 隠したままキャンセルされた場合に備えて、必ず表示に戻す
+  if (placedModel) placedModel.visible = true;
+}
+
+// 画面座標からplacedModelへレイキャストし、ヒットした点(ワールド座標)を返す
+// (通り芯・輪郭線・既存ピンは対象外にする)
+function raycastPlacedModelPoint(clientX, clientY) {
+  const ndc = new THREE.Vector2(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1
+  );
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObject(placedModel, true).filter(
+    (h) => !isGridLineObject(h.object) && !h.object.userData.isCommentPin
+  );
+  return hits.length > 0 ? hits[0].point.clone() : null;
+}
+
+// 世界座標の方向・点を、画面上のピクセル座標に変換する
+function projectDirectionToScreen(direction, distance = 10) {
+  const camPos = new THREE.Vector3();
+  camera.getWorldPosition(camPos);
+  const point = camPos.clone().addScaledVector(direction, distance);
+  return projectWorldPointToScreen(point);
+}
+function projectWorldPointToScreen(worldPoint) {
+  const ndc = worldPoint.clone().project(camera);
+  return {
+    x: (ndc.x * 0.5 + 0.5) * window.innerWidth,
+    y: (-ndc.y * 0.5 + 0.5) * window.innerHeight,
+  };
+}
+
+// 毎フレーム呼ばれる。画面中央の十字を基準に、各ステップの状態を更新する
+// (確定済みの1点目は、カメラが動いても実世界のその方向/その場所を
+//  指し続けるよう、毎フレーム再投影して追従させる)
+function updateOrientationAlignMarkers() {
+  if (orientationAlignStep === 0) return;
+
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
+
+  if (orientationAlignStep === 2 && orientationAlignRay1) {
+    const p = projectDirectionToScreen(orientationAlignRay1);
+    showOaMarker(oaMarker1, p.x, p.y, 'marker-yellow');
+    oaCenterPos = { x: centerX, y: centerY };
+    updateOaLine();
+  } else if (orientationAlignStep === 3) {
+    orientationAlignLastHit = raycastPlacedModelPoint(centerX, centerY);
+    oaCrosshair.classList.toggle('hit', Boolean(orientationAlignLastHit));
+    oaConfirmPointButton.disabled = !orientationAlignLastHit;
+  } else if (orientationAlignStep === 4 && orientationAlignModelPoint1 && placedModel) {
+    orientationAlignLastHit = raycastPlacedModelPoint(centerX, centerY);
+    oaCrosshair.classList.toggle('hit', Boolean(orientationAlignLastHit));
+    oaConfirmPointButton.disabled = !orientationAlignLastHit;
+    const worldP = placedModel.localToWorld(orientationAlignModelPoint1.clone());
+    const p = projectWorldPointToScreen(worldP);
+    showOaMarker(oaMarker1, p.x, p.y, 'marker-green');
+    oaCenterPos = { x: centerX, y: centerY };
+    updateOaLine();
+  }
+}
+
+// 「確定」ボタン(画面中央の十字を今の狙いとして記録する)
+// 画面中央(NDC座標(0,0))から、カメラを起点とするワールド空間のレイの向きを取得する。
+// (十字は画面中央=NDC(0,0)に表示しているので、それと完全に同じ計算方法にする。
+//  camera.getWorldDirection()は「カメラの正面(ローカルZ軸)」を返すが、実機の
+//  カメラはレンズ特性で投影行列が左右非対称なことがあり、その場合「カメラの
+//  正面」と「画面の真ん中」が一致せず、記録した点がズレる原因になっていた)
+function getCenterRayDirection() {
+  const ndc = new THREE.Vector2(0, 0);
+  raycaster.setFromCamera(ndc, camera);
+  return raycaster.ray.direction.clone();
+}
+
+function confirmOrientationAlignPoint() {
+  if (orientationAlignStep === 1) {
+    orientationAlignRay1 = getCenterRayDirection();
+    orientationAlignStep = 2;
+    updateOrientationAlignBanner('② 実物の同じ線上の点(2つ目)に画面中央の十字を合わせて「確定」');
+    return;
+  }
+
+  if (orientationAlignStep === 2) {
+    orientationAlignRay2 = getCenterRayDirection();
+    showOrientationAlignConfirm('この2点でよいですか？', () => {
+      orientationAlignStep = 3;
+      clearOrientationAlignMarkers();
+      // ここからBIM側を狙うので、隠していたモデルを表示し直す
+      placedModel.visible = true;
+      oaConfirmPointButton.style.display = 'block';
+      updateOrientationAlignBanner('③ BIMモデル上の、対応するエッジの点(1つ目)に十字を合わせて「確定」');
+    }, () => {
+      // やり直す: 点1からやり直す
+      orientationAlignStep = 1;
+      orientationAlignRay1 = null;
+      orientationAlignRay2 = null;
+      clearOrientationAlignMarkers();
+      oaConfirmPointButton.style.display = 'block';
+      updateOrientationAlignBanner('① 実物の壁の線上の点(1つ目)に画面中央の十字を合わせて「確定」');
+    });
+    return;
+  }
+
+  if (orientationAlignStep === 3) {
+    if (!orientationAlignLastHit) return; // ヒットしていなければ確定しない
+    orientationAlignModelPoint1 = placedModel.worldToLocal(orientationAlignLastHit.clone());
+    orientationAlignStep = 4;
+    updateOrientationAlignBanner('④ BIMモデル上の、対応するエッジの点(2つ目)に十字を合わせて「確定」');
+    return;
+  }
+
+  if (orientationAlignStep === 4) {
+    if (!orientationAlignLastHit) return;
+    const localPoint2 = placedModel.worldToLocal(orientationAlignLastHit.clone());
+    showOrientationAlignConfirm('この2点でよいですか？', () => {
+      finishOrientationAlign(localPoint2);
+    }, () => {
+      orientationAlignStep = 3;
+      orientationAlignModelPoint1 = null;
+      clearOrientationAlignMarkers();
+      oaConfirmPointButton.style.display = 'block';
+      updateOrientationAlignBanner('③ BIMモデル上の、対応するエッジの点(1つ目)に十字を合わせて「確定」');
+    });
+  }
+}
+
+function finishOrientationAlign(modelPoint2Local) {
+
+  // 実物側: 2点が同じ高さ(水平線上)にあるという前提で、奥行きが
+  // 分からなくても水平方向を求める(P1.y=P2.yから奥行きの比率が求まる)
+  const d1 = orientationAlignRay1;
+  const d2 = orientationAlignRay2;
+  if (Math.abs(d1.y) < 1e-6) {
+    // 1つ目のレイがほぼ水平(y成分がほぼ0)だと比率が計算できないので、
+    // 別の2点でやり直してもらう
+    updateOrientationAlignBanner('計算できませんでした。もう一度やり直してください');
+    cancelOrientationAlign();
+    return;
+  }
+  const k = d2.y / d1.y;
+  const worldDir = d2.clone().sub(d1.clone().multiplyScalar(k));
+  const angleWorldTarget = Math.atan2(worldDir.z, worldDir.x);
+
+  // BIM側: ローカル座標(現在の回転に影響されない)でのエッジの水平方向
+  const modelDirLocal = new THREE.Vector3().subVectors(modelPoint2Local, orientationAlignModelPoint1);
+  if (modelDirLocal.x === 0 && modelDirLocal.z === 0) {
+    updateOrientationAlignBanner('BIM側の2点が同じ位置です。やり直してください');
+    cancelOrientationAlign();
+    return;
+  }
+  const angleModelLocal = Math.atan2(modelDirLocal.z, modelDirLocal.x);
+
+  // rotation.y = angleModelLocal - angleWorldTarget (実機のthree.jsで検証済み)
+  let newRotationY = angleModelLocal - angleWorldTarget;
+  // -180〜180度の範囲に正規化しておく(見た目の値が分かりやすいように)
+  newRotationY = Math.atan2(Math.sin(newRotationY), Math.cos(newRotationY));
+  placedModel.rotation.y = newRotationY;
+
+  updateOrientationAlignBanner('向きを合わせました');
+  orientationAlignButton.classList.remove('active');
+  pointAlignButton.disabled = false;
+  confirmViewButton.disabled = false;
+  positionToggleButton.disabled = false;
+  orientationAlignStep = 0;
+  setTimeout(() => {
+    if (orientationAlignStep === 0) {
+      updateOrientationAlignBanner('');
+      clearOrientationAlignMarkers();
+    }
+  }, 1500);
+}
+
+// ---- 「エッジで合わせる」(エッジ1本=2点による位置合わせ) ----
+//
+// 考え方:
+// 1. BIM側で、まず角(コーナー)を1つ選ぶ。次に、その角に繋がるエッジ
+//    (直線)の中から1本を選ぶ(2点=角ともう片端、で1本のエッジになる)。
+// 2. 実物側では、Depth Sensingと画面中央の十字を使い、BIM側で選んだ
+//    2点(角→エッジのもう片端)と同じ場所を、同じ順番でなぞる。
+// 3. 重力方向(Y軸)が既知という前提があるため、未知数は「Y軸回転+
+//    位置XYZ」の4つだけ。角・エッジ先端という具体的な対応点が2組あれば
+//    過不足なく解ける。回転はエッジの方向(2点間)だけで決める。エッジは
+//    基線が長いほど1点ごとの深度誤差の影響を受けにくく、角度の精度が
+//    安定しやすい
+
+// 番号付きの丸いマーカー(スプライト)を作る。BIM側・実物側の両方で、
+// 同じ番号・同じ色を使うことで「同じ点を同じ順番で選ぶ」際の目印にする。
+function createPointAlignMarkerSprite(number, colorHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const colorCss = '#' + colorHex.toString(16).padStart(6, '0');
+  ctx.beginPath();
+  ctx.arc(64, 64, 58, 0, Math.PI * 2);
+  ctx.fillStyle = colorCss;
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#ffffff';
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 72px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(number), 64, 68);
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, sizeAttenuation: true });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(0.12, 0.12, 0.12);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+
+// BIM専用ビュー(カメラ映像を使わず、ピンチズーム・スライド移動で自由に見る)を
+// 開始する。placedModel自体(選択済みの点マーカーごと)を、専用のシーンに
+// 一時的に移して、専用のレンダラー・カメラで描画する。
+function startPointAlignBimView() {
+  const canvas = document.createElement('canvas');
+  const pixelRatio = window.devicePixelRatio || 1;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  canvas.width = width * pixelRatio;
+  canvas.height = height * pixelRatio;
+  pointAlignCanvasWrap.appendChild(canvas);
+
+  pointAlignRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  pointAlignRenderer.setPixelRatio(pixelRatio);
+  pointAlignRenderer.setSize(width, height, false);
+
+  pointAlignScene = new THREE.Scene();
+  const light = new THREE.HemisphereLight(0xffffff, 0x666666, 1.5);
+  pointAlignScene.add(light);
+
+  // 実際のplacedModelをそのまま(複製せず)このシーンに移す。選択済みの
+  // 点マーカーもplacedModelの子として一緒に付いてくる。
+  pointAlignScene.add(placedModel);
+
+  pointAlignCamera = new THREE.PerspectiveCamera(70, width / height, 0.01, 30);
+  // その時点のAR側カメラの位置・向きを引き継ぐ(切り替わった瞬間に見え方が
+  // 急に変わらないようにするため)
+  const camPos = new THREE.Vector3();
+  const camQuat = new THREE.Quaternion();
+  camera.getWorldPosition(camPos);
+  camera.getWorldQuaternion(camQuat);
+  pointAlignCamera.position.copy(camPos);
+  pointAlignCamera.quaternion.copy(camQuat);
+  // 以後の回転操作は、ロール(傾き)が付かないようyaw(左右)・pitch(上下)を
+  // 別々に保持して合成する。引き継いだ向きから初期値を求めておく。
+  const initialEuler = new THREE.Euler().setFromQuaternion(camQuat, 'YXZ');
+  pointAlignYaw = initialEuler.y;
+  pointAlignPitch = initialEuler.x;
+
+  pointAlignActivePointers.clear();
+  setupPointAlignBimViewGestures();
+  pointAlignCanvasWrap.style.display = 'block';
+}
+
+// BIM専用ビューを後片付けし、placedModelを元のAR用シーンに戻す
+function teardownPointAlignBimView() {
+  pointAlignCanvasWrap.style.display = 'none';
+  pointAlignActivePointers.clear();
+
+  if (placedModel && placedModel.parent !== scene) {
+    scene.add(placedModel);
+  }
+  pointAlignScene = null;
+  pointAlignCamera = null;
+
+  if (pointAlignRenderer) {
+    pointAlignRenderer.dispose();
+    if (pointAlignRenderer.domElement.parentNode) {
+      pointAlignRenderer.domElement.parentNode.removeChild(pointAlignRenderer.domElement);
+    }
+    pointAlignRenderer = null;
+  }
+}
+
+// 指1本のドラッグでカメラを回転、指2本のドラッグで平行移動、
+// 指2本のピンチでズームする(Pointer Eventsで指の本数を判定し、
+// 2本の時はズームと平行移動を同時に検出する)
+function setupPointAlignBimViewGestures() {
+  const wrap = pointAlignCanvasWrap;
+
+  const getPinchDist = () => {
+    const pts = Array.from(pointAlignActivePointers.values());
+    if (pts.length < 2) return 0;
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+  };
+  const getMidpoint = () => {
+    const pts = Array.from(pointAlignActivePointers.values());
+    if (pts.length < 2) return { x: 0, y: 0 };
+    return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+  };
+
+  const bimViewActive = () => pointAlignStep === 1 || confirmViewActive;
+  let tapStartX = 0, tapStartY = 0, tapMoved = false;
+
+  wrap.onpointerdown = (event) => {
+    if (!bimViewActive()) return;
+    wrap.setPointerCapture(event.pointerId);
+    pointAlignActivePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointAlignActivePointers.size === 1) {
+      pointAlignRotateLastX = event.clientX;
+      pointAlignRotateLastY = event.clientY;
+      tapStartX = event.clientX;
+      tapStartY = event.clientY;
+      tapMoved = false;
+    } else if (pointAlignActivePointers.size === 2) {
+      pointAlignPinchLastDist = getPinchDist();
+      const mid = getMidpoint();
+      pointAlignPanLastX = mid.x;
+      pointAlignPanLastY = mid.y;
+      tapMoved = true; // 2本指になった時点で、タップ(ピンを開く)扱いはしない
+    }
+  };
+
+  wrap.onpointermove = (event) => {
+    if (!bimViewActive() || !pointAlignActivePointers.has(event.pointerId)) return;
+    pointAlignActivePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (pointAlignActivePointers.size === 1) {
+      const dx = event.clientX - pointAlignRotateLastX;
+      const dy = event.clientY - pointAlignRotateLastY;
+      pointAlignRotateLastX = event.clientX;
+      pointAlignRotateLastY = event.clientY;
+      if (confirmViewActive) rotateConfirmOrbit(dx, dy); // モデル中心の周りを回る
+      else rotatePointAlignCamera(dx, dy);
+      if (Math.abs(event.clientX - tapStartX) > 8 || Math.abs(event.clientY - tapStartY) > 8) {
+        tapMoved = true;
+      }
+    } else if (pointAlignActivePointers.size === 2) {
+      const dist = getPinchDist();
+      const zoomDelta = dist - pointAlignPinchLastDist;
+      pointAlignPinchLastDist = dist;
+
+      if (confirmViewActive) {
+        zoomConfirmOrbit(zoomDelta);
+        const mid = getMidpoint();
+        panConfirmOrbit(mid.x - pointAlignPanLastX, mid.y - pointAlignPanLastY);
+        pointAlignPanLastX = mid.x;
+        pointAlignPanLastY = mid.y;
+      } else {
+        zoomPointAlignCamera(zoomDelta);
+        const mid = getMidpoint();
+        const pdx = mid.x - pointAlignPanLastX;
+        const pdy = mid.y - pointAlignPanLastY;
+        pointAlignPanLastX = mid.x;
+        pointAlignPanLastY = mid.y;
+        panPointAlignCamera(pdx, pdy);
+      }
+    }
+  };
+
+  const endPointer = (event) => {
+    pointAlignActivePointers.delete(event.pointerId);
+    // 指の本数が変わった直後に基準位置がずれて急に動いて見えないよう、
+    // 残っている指の位置・距離・中点で基準を取り直す
+    const pts = Array.from(pointAlignActivePointers.values());
+    if (pts.length === 1) {
+      pointAlignRotateLastX = pts[0].x;
+      pointAlignRotateLastY = pts[0].y;
+    } else if (pts.length === 2) {
+      pointAlignPinchLastDist = getPinchDist();
+      const mid = getMidpoint();
+      pointAlignPanLastX = mid.x;
+      pointAlignPanLastY = mid.y;
+    }
+    // 「現在地・コメント確認」中、指1本でドラッグせずそのまま離した(=タップ)場合は、
+    // コメントのピンに当たっていればスレッドを開く
+    if (confirmViewActive && !tapMoved && pts.length === 0) {
+      handleConfirmViewTap(tapStartX, tapStartY);
+    }
+  };
+  wrap.onpointerup = endPointer;
+  wrap.onpointercancel = endPointer;
+}
+
+// 画面のスライド量(px)を、カメラのローカルの左右・上下方向への移動に変換する
+function panPointAlignCamera(dxPx, dyPx) {
+  if (!pointAlignCamera) return;
+  const PAN_SPEED = 0.004; // メートル/ピクセル(だいたいの目安。実機で調整可)
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(pointAlignCamera.quaternion);
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(pointAlignCamera.quaternion);
+  pointAlignCamera.position.addScaledVector(right, -dxPx * PAN_SPEED);
+  pointAlignCamera.position.addScaledVector(up, dyPx * PAN_SPEED);
+}
+
+// 2本指の中点の移動量(px)を、カメラの向き(yaw・pitch)の変化に変換する。
+// ロール(傾き)が付かないよう、yaw/pitchを別々に積み上げてから合成する。
+function rotatePointAlignCamera(dxPx, dyPx) {
+  if (!pointAlignCamera) return;
+  const ROTATE_SPEED = 0.006; // ラジアン/ピクセル(だいたいの目安。実機で調整可)
+  pointAlignYaw -= dxPx * ROTATE_SPEED;
+  pointAlignPitch -= dyPx * ROTATE_SPEED;
+  const maxPitch = Math.PI / 2 - 0.05; // 真上・真下を超えて反転しないよう制限する
+  pointAlignPitch = Math.max(-maxPitch, Math.min(maxPitch, pointAlignPitch));
+  pointAlignCamera.quaternion.setFromEuler(new THREE.Euler(pointAlignPitch, pointAlignYaw, 0, 'YXZ'));
+}
+
+// ピンチ距離の変化量(px)を、カメラの前後移動(ズーム)に変換する
+function zoomPointAlignCamera(deltaPx) {
+  if (!pointAlignCamera) return;
+  const ZOOM_SPEED = 0.006; // メートル/ピクセル(だいたいの目安。実機で調整可)
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(pointAlignCamera.quaternion);
+  pointAlignCamera.position.addScaledVector(forward, deltaPx * ZOOM_SPEED);
+}
+
+function pointAlignBanner() {
+  if (pointAlignStep === 1) {
+    if (pointAlignStage === 0) return 'BIM上で、基準にする角(コーナー)をタップして選択してください';
+    return 'その角に繋がるエッジを選んでください(エッジの向きが回転の基準になります)';
+  }
+  if (pointAlignStep === 2) {
+    const labels = ['角', 'エッジ先端'];
+    const realN = pointAlignRealPointsWorld.length;
+    return `実物側で${labels[realN]}に十字を合わせ「確定」(${realN}/2)`;
+  }
+  return '';
+}
+
+function startPointAlign() {
+  if (!placedModel) return;
+  pointAlignStep = 1;
+  pointAlignStage = 0;
+  clearPointAlignBimMarkers();
+  clearPointAlignRealMarkers();
+  pointAlignCornerLocal = null;
+  pointAlignEdgeOtherLocal = null;
+  pointAlignConnectedEdges = [];
+  pointAlignPendingVertex = null;
+  pointAlignPendingEdge = null;
+  pointAlignRealPointsWorld = [];
+  pointAlignButton.classList.add('active');
+  orientationAlignButton.disabled = true;
+  confirmViewButton.disabled = true;
+  positionToggleButton.disabled = true;
+  oaConfirmPointButton.style.display = 'block';
+  oaConfirmPointButton.disabled = true;
+  oaCrosshair.style.display = 'block';
+  oaCrosshair.classList.remove('hit');
+  rightGroup.classList.add('collapsed'); // BIM専用ビューの邪魔にならないよう、メニューは自動で閉じる
+  startPointAlignBimView();
+  updateOrientationAlignBanner(pointAlignBanner());
+}
+
+// 再合わせ: 初回に使ったBIM側の2点を再利用し、実物側の2点だけ測り直す
+function startRealign() {
+  if (!placedModel || !alignRef) {
+    updateOrientationAlignBanner('再合わせには、先に「エッジで合わせる」での位置合わせが必要です');
+    setTimeout(() => { if (pointAlignStep === 0) updateOrientationAlignBanner(''); }, 2500);
+    return;
+  }
+  if (pointAlignStep > 0 || orientationAlignStep > 0 || confirmViewActive) return;
+  realignActive = true;
+  realignButton.classList.add('active');
+  pointAlignCornerLocal = alignRef.cornerLocal.clone();
+  pointAlignEdgeOtherLocal = alignRef.edgeOtherLocal.clone();
+  pointAlignRealPointsWorld = [];
+  clearPointAlignRealMarkers();
+  orientationAlignButton.disabled = true;
+  confirmViewButton.disabled = true;
+  positionToggleButton.disabled = true;
+  rightGroup.classList.add('collapsed');
+  finishPointAlignBimSelection(); // BIM側の選択は飛ばして、実物側の測定へ
+}
+
+function cancelPointAlign() {
+  realignActive = false;
+  realignButton.classList.remove('active');
+  pointAlignStep = 0;
+  pointAlignStage = 0;
+  pointAlignCornerLocal = null;
+  pointAlignEdgeOtherLocal = null;
+  pointAlignConnectedEdges = [];
+  pointAlignPendingVertex = null;
+  pointAlignPendingEdge = null;
+  pointAlignRealPointsWorld = [];
+  pointAlignLiveWorldPoint = null;
+  pointAlignButton.classList.remove('active');
+  orientationAlignButton.disabled = false;
+  confirmViewButton.disabled = false;
+  positionToggleButton.disabled = false;
+  updateOrientationAlignBanner('');
+  oaConfirmPointButton.style.display = 'none';
+  oaConfirmPanel.style.display = 'none';
+  oaCrosshair.style.display = 'none';
+  oaCrosshair.classList.remove('hit');
+  clearPointAlignBimMarkers();
+  clearPointAlignRealMarkers();
+  hidePointAlignPreviewMarker();
+  teardownPointAlignBimView();
+  if (placedModel) placedModel.visible = true;
+}
+
+function clearPointAlignBimMarkers() {
+  for (const m of pointAlignBimMarkers) {
+    if (m.parent) m.parent.remove(m);
+  }
+  pointAlignBimMarkers = [];
+}
+
+function clearPointAlignRealMarkers() {
+  for (const m of pointAlignRealMarkers) {
+    if (m.parent) m.parent.remove(m);
+  }
+  pointAlignRealMarkers = [];
+}
+
+// BIM側: 画面座標に一番近い、輪郭線の頂点を探す(指定したカメラで投影する)
+function findNearestModelVertex(clientX, clientY, maxScreenDist, projCamera) {
+  let best = null;
+  let bestDist = maxScreenDist;
+  const tempWorld = new THREE.Vector3();
+
+  const consider = (mesh, localPoint) => {
+    tempWorld.copy(localPoint);
+    mesh.localToWorld(tempWorld);
+    const ndc = tempWorld.clone().project(projCamera);
+    if (ndc.z > 1 || ndc.z < -1) return;
+    const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+    const dx = sx - clientX, dy = sy - clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { mesh, localPoint: localPoint.clone() };
+    }
+  };
+
+  for (const seg of modelEdgeSegments) {
+    consider(seg.mesh, seg.p1);
+    consider(seg.mesh, seg.p2);
+  }
+  return best;
+}
+
+// 指定したワールド座標の角(頂点)に繋がっているエッジを、modelEdgeSegmentsから
+// 探す。戻り値は「もう片端(=角と反対側の端点)」の候補一覧。
+function findConnectedEdges(cornerWorldPoint, epsilon = 0.02) {
+  const result = [];
+  for (const seg of modelEdgeSegments) {
+    const w1 = seg.mesh.localToWorld(seg.p1.clone());
+    const w2 = seg.mesh.localToWorld(seg.p2.clone());
+    if (w1.distanceTo(cornerWorldPoint) < epsilon) {
+      result.push({ mesh: seg.mesh, localPoint: seg.p2.clone(), worldPoint: w2 });
+    } else if (w2.distanceTo(cornerWorldPoint) < epsilon) {
+      result.push({ mesh: seg.mesh, localPoint: seg.p1.clone(), worldPoint: w1 });
+    }
+  }
+  return result;
+}
+
+// 画面座標に一番近い、候補エッジ(角に繋がるエッジの、もう片端)を探す
+function findNearestConnectedEdge(clientX, clientY, candidates, maxScreenDist, projCamera) {
+  let best = null;
+  let bestDist = maxScreenDist;
+  for (const cand of candidates) {
+    const ndc = cand.worldPoint.clone().project(projCamera);
+    if (ndc.z > 1 || ndc.z < -1) continue;
+    const sx = (ndc.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-ndc.y * 0.5 + 0.5) * window.innerHeight;
+    const dx = sx - clientX, dy = sy - clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = cand;
+    }
+  }
+  return best;
+}
+
+// 候補頂点を示すオレンジ色のマーカー。placedModelの子にして、
+// BIM専用ビュー・AR用シーンのどちらに居ても正しい位置に表示されるようにする。
+function ensurePointAlignPreviewMarker() {
+  if (pointAlignPreviewMarker) return;
+  const geom = new THREE.SphereGeometry(0.025, 10, 10);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xff9800, depthTest: false });
+  pointAlignPreviewMarker = new THREE.Mesh(geom, mat);
+  pointAlignPreviewMarker.renderOrder = 999;
+  pointAlignPreviewMarker.visible = false;
+}
+function showPointAlignPreviewMarker(mesh, localPoint) {
+  ensurePointAlignPreviewMarker();
+  if (pointAlignPreviewMarker.parent !== placedModel) {
+    placedModel.add(pointAlignPreviewMarker);
+  }
+  const world = mesh.localToWorld(localPoint.clone());
+  pointAlignPreviewMarker.position.copy(placedModel.worldToLocal(world));
+  pointAlignPreviewMarker.visible = true;
+}
+function hidePointAlignPreviewMarker() {
+  if (pointAlignPreviewMarker) pointAlignPreviewMarker.visible = false;
+}
+
+// 毎フレーム呼ばれる(BIM専用ビュー表示中)。段階(角/エッジ)に応じて、
+// 画面中央の十字が指す候補を探して表示する。
+function updatePointAlignBimCrosshairPosition() {
+  if (!pointAlignCamera) return;
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+
+  if (pointAlignStage === 1) {
+    // エッジを選ぶ段階: 角に繋がるエッジだけを対象にする
+    const nearest = findNearestConnectedEdge(cx, cy, pointAlignConnectedEdges, 90, pointAlignCamera);
+    if (!nearest) {
+      pointAlignPendingEdge = null;
+      hidePointAlignPreviewMarker();
+      oaConfirmPointButton.disabled = true;
+      oaCrosshair.classList.remove('hit');
+      return;
+    }
+    pointAlignPendingEdge = nearest;
+    showPointAlignPreviewMarker(nearest.mesh, nearest.localPoint);
+    oaConfirmPointButton.disabled = false;
+    oaCrosshair.classList.add('hit');
+    return;
+  }
+
+  // 角(stage0)を選ぶ段階: 自由に頂点スナップ
+  const nearest = findNearestModelVertex(cx, cy, 60, pointAlignCamera);
+  if (!nearest) {
+    pointAlignPendingVertex = null;
+    hidePointAlignPreviewMarker();
+    oaConfirmPointButton.disabled = true;
+    oaCrosshair.classList.remove('hit');
+    return;
+  }
+  pointAlignPendingVertex = nearest;
+  showPointAlignPreviewMarker(nearest.mesh, nearest.localPoint);
+  oaConfirmPointButton.disabled = false;
+  oaCrosshair.classList.add('hit');
+}
+
+// 「確定」ボタン(BIM側の候補を1つ確定する。段階によって処理が異なる)
+function confirmPointAlignBimPoint() {
+  if (pointAlignStage === 0) {
+    if (!pointAlignPendingVertex) return;
+    const { mesh, localPoint } = pointAlignPendingVertex;
+    mesh.updateMatrixWorld(true);
+    const worldPoint = mesh.localToWorld(localPoint.clone());
+    pointAlignCornerLocal = placedModel.worldToLocal(worldPoint.clone());
+
+    pointAlignConnectedEdges = findConnectedEdges(worldPoint);
+    if (pointAlignConnectedEdges.length === 0) {
+      updateOrientationAlignBanner('この頂点に繋がるエッジが見つかりませんでした。別の角を選んでください');
+      pointAlignCornerLocal = null;
+      pointAlignPendingVertex = null;
+      hidePointAlignPreviewMarker();
+      return;
+    }
+
+    const sprite = createPointAlignMarkerSprite(1, POINT_ALIGN_COLORS[0]);
+    sprite.position.copy(pointAlignCornerLocal);
+    placedModel.add(sprite);
+    pointAlignBimMarkers.push(sprite);
+
+    hidePointAlignPreviewMarker();
+    pointAlignPendingVertex = null;
+    pointAlignStage = 1;
+    oaConfirmPointButton.disabled = true;
+    updateOrientationAlignBanner(pointAlignBanner());
+    return;
+  }
+
+  // stage 1: エッジのもう片端(B)
+  if (!pointAlignPendingEdge) return;
+  const { mesh, localPoint } = pointAlignPendingEdge;
+  mesh.updateMatrixWorld(true);
+  const worldPoint = mesh.localToWorld(localPoint.clone());
+  pointAlignEdgeOtherLocal = placedModel.worldToLocal(worldPoint.clone());
+
+  const sprite = createPointAlignMarkerSprite(2, POINT_ALIGN_COLORS[1]);
+  sprite.position.copy(pointAlignEdgeOtherLocal);
+  placedModel.add(sprite);
+  pointAlignBimMarkers.push(sprite);
+
+  hidePointAlignPreviewMarker();
+  pointAlignPendingEdge = null;
+  pointAlignConnectedEdges = [];
+  finishPointAlignBimSelection();
+}
+
+function finishPointAlignBimSelection() {
+  pointAlignStep = 2;
+  pointAlignRealPointsWorld = [];
+  clearPointAlignRealMarkers();
+  oaConfirmPointButton.style.display = 'block';
+  oaConfirmPointButton.disabled = true;
+  oaCrosshair.style.display = 'block';
+  oaCrosshair.classList.remove('hit');
+  teardownPointAlignBimView();
+  placedModel.visible = false; // 実物側の点を狙う間は、BIMが邪魔にならないよう隠す
+  updateOrientationAlignBanner(pointAlignBanner());
+}
+
+
+// 毎フレーム呼ばれる。BIM選択中(step1)は段階に応じた候補を探し、
+// 実物側選択中(step2)はDepth Sensing APIから画面中央(十字)が指す実物までの
+// 距離を取得し、暫定の実物側の点(ワールド座標)を計算する。
+function updatePointAlignFrame(frame) {
+  if (pointAlignStep === 1) {
+    updatePointAlignBimCrosshairPosition();
+    return;
+  }
+  if (pointAlignStep !== 2) return;
+  pointAlignLiveWorldPoint = null;
+
+  // 「エッジで合わせる」の実物側選択に入った最初のフレームで、Depth Sensing
+  // 自体が有効になっているかを案内する(非対応なら、待っても状況は変わらないため)
+  if (!arDepthUsage) {
+    updateOrientationAlignBanner(
+      pointAlignBanner() + '(このデバイス/ブラウザはDepth Sensingに非対応の可能性)'
+    );
+    oaConfirmPointButton.disabled = true;
+    oaCrosshair.classList.remove('hit');
+    return;
+  }
+
+  if (!frame || typeof frame.getDepthInformation !== 'function') {
+    oaConfirmPointButton.disabled = true;
+    oaCrosshair.classList.remove('hit');
+    return;
+  }
+  const referenceSpace = renderer.xr.getReferenceSpace();
+  const pose = frame.getViewerPose(referenceSpace);
+  if (!pose || pose.views.length === 0) {
+    oaConfirmPointButton.disabled = true;
+    oaCrosshair.classList.remove('hit');
+    return;
+  }
+  let depthInfo = null;
+  let depthErrorName = null;
+  try {
+    depthInfo = frame.getDepthInformation(pose.views[0]);
+  } catch (e) {
+    depthInfo = null;
+    depthErrorName = e && (e.name || e.message) || 'unknown';
+  }
+  if (!depthInfo) {
+    const suffix = depthErrorName ? `(深度エラー:${depthErrorName})` : '(深度取得待ち)';
+    updateOrientationAlignBanner(pointAlignBanner() + suffix);
+    oaConfirmPointButton.disabled = true;
+    oaCrosshair.classList.remove('hit');
+    return;
+  }
+  let depthMeters = 0;
+  try {
+    depthMeters = depthInfo.getDepthInMeters(0.5, 0.5);
+  } catch (e) {
+    depthMeters = 0;
+  }
+  // 0(未取得)や、部屋の中としては現実的でない距離は無効とみなす
+  if (!depthMeters || depthMeters < 0.03 || depthMeters > 12) {
+    updateOrientationAlignBanner(pointAlignBanner() + `(取得値:${depthMeters.toFixed(2)}m)`);
+    oaConfirmPointButton.disabled = true;
+    oaCrosshair.classList.remove('hit');
+    return;
+  }
+  const rayOrigin = new THREE.Vector3();
+  camera.getWorldPosition(rayOrigin);
+  // 画面中央(十字)のレイ = カメラの正面方向。ちょうど画面の中心のピクセルなので、
+  // Depth Sensingの深度値(カメラ光軸方向の距離)を、そのままこの向きの距離として使える。
+  const rayDir = getCenterRayDirection();
+  pointAlignLiveWorldPoint = rayOrigin.clone().addScaledVector(rayDir, depthMeters);
+  oaConfirmPointButton.disabled = false;
+  oaCrosshair.classList.add('hit');
+  updateOrientationAlignBanner(pointAlignBanner());
+}
+
+// 「確定」ボタン(実物側の点を1つ確定する)。3点そろったら、
+// 自動的に位置合わせの計算・適用まで行う。
+function confirmPointAlignRealPoint() {
+  if (!pointAlignLiveWorldPoint) return;
+  const index = pointAlignRealPointsWorld.length;
+  const point = pointAlignLiveWorldPoint.clone();
+  pointAlignRealPointsWorld.push(point);
+
+  const sprite = createPointAlignMarkerSprite(index + 1, POINT_ALIGN_COLORS[index]);
+  sprite.position.copy(point);
+  scene.add(sprite);
+  pointAlignRealMarkers.push(sprite);
+
+  if (pointAlignRealPointsWorld.length >= 2) {
+    applyPointAlign();
+    return;
+  }
+  updateOrientationAlignBanner(pointAlignBanner());
+}
+
+// エッジ(角A→もう片端B)の2点対応だけから、Y軸回転と位置(X,Y,Z)を計算し、
+// placedModelに適用する。重力方向(Y軸)が既知という前提があるため、
+// 未知数(回転1+位置3=4個)に対し、2点の対応(情報6個)で過不足なく解ける。
+//
+// 手順:
+// 1. 回転: BIM側のエッジ方向(B-A)と、実物側のエッジ方向(B'-A')を、XZ平面上で
+//    一致させる角度を解く(2点間の「方向」なので、短い1点1点の深度誤差より
+//    角度の精度が安定しやすい=基線が長いほど有利、という考え方)
+// 2. 位置: 回転後のBIM側A・Bに対する実物側A'・B'のズレ(オフセット)を
+//    平均する。A・Bは具体的な対応点なので、これだけでXYZ全方向の位置が決まる
+function applyPointAlign() {
+  if (!pointAlignCornerLocal || !pointAlignEdgeOtherLocal) return;
+  if (pointAlignRealPointsWorld.length !== 2) return;
+
+  const A = pointAlignCornerLocal.clone().multiplyScalar(currentScale);
+  const B = pointAlignEdgeOtherLocal.clone().multiplyScalar(currentScale);
+  const [Ar, Br] = pointAlignRealPointsWorld;
+
+  // 回転角(BIM側エッジ方向と実物側エッジ方向を、XZ平面上で合わせる)
+  const bimDir = new THREE.Vector3().subVectors(B, A);
+  const realDir = new THREE.Vector3().subVectors(Br, Ar);
+  const sumDot = bimDir.x * realDir.x + bimDir.z * realDir.z;
+  const sumCrossAdj = bimDir.z * realDir.x - bimDir.x * realDir.z;
+  const rotationY = Math.atan2(sumCrossAdj, sumDot);
+
+  placedModel.rotation.y = rotationY;
+  placedModel.updateMatrixWorld(true);
+
+  const cosY = Math.cos(rotationY), sinY = Math.sin(rotationY);
+  const rotateXZ = (p) => new THREE.Vector3(
+    p.x * cosY + p.z * sinY,
+    p.y,
+    -p.x * sinY + p.z * cosY
+  );
+  const Ar2 = rotateXZ(A);
+  const Br2 = rotateXZ(B);
+
+  // A・Bそれぞれのズレ(オフセット)の平均 = XYZ全方向の位置
+  const offsetA = new THREE.Vector3().subVectors(Ar, Ar2);
+  const offsetB = new THREE.Vector3().subVectors(Br, Br2);
+  const finalOffset = offsetA.clone().add(offsetB).multiplyScalar(0.5);
+
+  placedModel.position.copy(finalOffset);
+
+  alignRef = { cornerLocal: pointAlignCornerLocal.clone(), edgeOtherLocal: pointAlignEdgeOtherLocal.clone() };
+  const wasRealign = realignActive;
+  realignActive = false;
+  realignButton.classList.remove('active');
+  updateOrientationAlignBanner(wasRealign ? '再合わせしました' : 'エッジ(2点)で位置と向きを合わせました');
+  pointAlignButton.classList.remove('active');
+  orientationAlignButton.disabled = false;
+  confirmViewButton.disabled = false;
+  positionToggleButton.disabled = false;
+  placedModel.visible = true;
+  oaCrosshair.style.display = 'none';
+  oaCrosshair.classList.remove('hit');
+  pointAlignStep = 0;
+  pointAlignStage = 0;
+  oaConfirmPointButton.style.display = 'none';
+  clearPointAlignBimMarkers();
+  clearPointAlignRealMarkers();
+  setTimeout(() => {
+    if (pointAlignStep === 0) updateOrientationAlignBanner('');
+  }, 2000);
+
+  saveAppState();
+}
+
+
+
+// ---- 「現在地・コメント確認」(セッションを切らずに全体を見渡すビュー) ----
+//
+// 考え方: 「点で合わせる」と同じBIM専用ビュー(別レンダラーで
+// カメラ映像を覆い隠し、ピンチズーム・回転・平行移動で自由に見る)を流用し、
+// そこに「現在地(緑の矢印)」と「コメントのピン」を重ねて表示するだけの、
+// 位置合わせを行わない軽量な確認用モード。ARセッション自体は裏で動いたまま
+// なので、位置合わせの結果が失われることはない。
+
+// 現在地を示す矢印マーカー(緑)を作る。先端が常に正面(-Z)を向くよう、
+// ジオメトリ自体にあらかじめ回転・オフセットを焼き込んでおく。
+function ensureConfirmViewMarker() {
+  if (confirmViewMarker) return;
+  // transparent:trueにしている理由: three.jsは不透明な物を先に、半透明な物を後に描くため、
+  // 不透明のままだと、BIMモデル(半透明)に後から上書きされて薄く見えてしまう。
+  // 半透明の仲間に入れ(opacityは1のまま)、renderOrderで最後に描かせて最前面に出す
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x00e676, depthTest: false, depthWrite: false,
+    transparent: true, opacity: 1, side: THREE.DoubleSide,
+  });
+  const outlineMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, depthTest: false, depthWrite: false,
+    transparent: true, opacity: 1, side: THREE.DoubleSide,
+  });
+
+  // 地面に沿った矢印(平面図を真上から見ても、位置と向きがはっきり分かるように)
+  const arrowShape = new THREE.Shape();
+  arrowShape.moveTo(0, 0.28);
+  arrowShape.lineTo(-0.16, -0.14);
+  arrowShape.lineTo(-0.06, -0.09);
+  arrowShape.lineTo(-0.06, -0.28);
+  arrowShape.lineTo(0.06, -0.28);
+  arrowShape.lineTo(0.06, -0.09);
+  arrowShape.lineTo(0.16, -0.14);
+  arrowShape.closePath();
+  const arrowGeom = new THREE.ShapeGeometry(arrowShape);
+  arrowGeom.rotateX(-Math.PI / 2); // 地面(XZ平面)に寝かせる。先端が-Z(前方)を向く
+  arrowGeom.translate(0, 0.01, 0); // 床にわずかに浮かせて重なりを防ぐ
+  const arrow = new THREE.Mesh(arrowGeom, mat);
+  arrow.renderOrder = 1000;
+  // 背景(グレーのBIM)に埋もれないよう、黒い縁取りを一回り大きく下に敷く
+  const arrowOutline = new THREE.Mesh(arrowGeom, outlineMat);
+  arrowOutline.scale.set(1.4, 1, 1.28);
+  arrowOutline.renderOrder = 999;
+
+  // 3D視点でも見やすいよう、上に小さなポール+球も立てる
+  const poleGeom = new THREE.CylinderGeometry(0.012, 0.012, 0.3, 8);
+  const pole = new THREE.Mesh(poleGeom, mat);
+  pole.position.y = 0.15;
+  pole.renderOrder = 1000;
+
+  const sphereGeom = new THREE.SphereGeometry(0.06, 16, 16);
+  const sphere = new THREE.Mesh(sphereGeom, mat);
+  sphere.position.y = 0.3;
+  sphere.renderOrder = 1000;
+
+  const group = new THREE.Group();
+  group.add(arrowOutline);
+  group.add(arrow);
+  group.add(pole);
+  group.add(sphere);
+  group.visible = false;
+  confirmViewMarker = group;
+}
+
+function startConfirmView() {
+  if (!placedModel) return;
+  confirmViewActive = true;
+  confirmViewButton.classList.add('active');
+  confirmViewButton.style.display = 'none'; // 戻るのは右上の「ARに戻る」ボタン
+  confirmViewBackButton.style.display = 'block';
+  confirmViewPrevLabelsVisible = commentLabelsVisible;
+  commentLabelsVisible = true; // PC版のように、コメントを常時表示する
+  commentLabelsContainer.style.zIndex = '17'; // BIM専用ビュー(z=15)より手前に出す
+  cvLeaderSvg.style.display = 'block';
+  cvListTab.style.display = 'block';
+  gridLabelsContainer.style.zIndex = '16';
+  orientationAlignButton.disabled = true;
+  pointAlignButton.disabled = true;
+  positionToggleButton.disabled = true;
+  rightGroup.classList.add('collapsed'); // ビューの邪魔にならないよう、メニューは自動で閉じる
+  commentPinButton.style.display = 'none';
+  commentLabelsToggle.style.display = 'none';
+  startPointAlignBimView(); // 「点で合わせる」と共通のBIM専用ビューを流用する
+  initConfirmOrbit();
+  ensureConfirmViewMarker();
+  pointAlignScene.add(confirmViewMarker);
+  confirmViewMarker.visible = true;
+  confirmViewRefMarkers = [];
+  if (alignRef) {
+    [[alignRef.cornerLocal, 1], [alignRef.edgeOtherLocal, 2]].forEach(([pt, n]) => {
+      const sp = createPointAlignMarkerSprite(n, POINT_ALIGN_COLORS[n - 1]);
+      sp.position.copy(pt);
+      placedModel.add(sp);
+      confirmViewRefMarkers.push(sp);
+    });
+  }
+  updateOrientationAlignBanner('');
+}
+
+function cancelConfirmView() {
+  confirmViewActive = false;
+  commentLabelsContainer.style.zIndex = '';
+  gridLabelsContainer.style.zIndex = '';
+  cvLeaderSvg.style.display = 'none';
+  cvLeaderSvg.innerHTML = '';
+  cvLeaderLines.clear();
+  cvListTab.style.display = 'none';
+  closeCvList();
+  cvListPanel.style.display = 'none';
+  // ARに戻っても、コメントの表示はそのまま残す(ONのまま。ボタンの表示も合わせる)
+  commentLabelsVisible = true;
+  commentLabelsToggle.classList.add('active');
+  commentLabelsToggle.textContent = '💬 コメント非表示';
+  pinLabelElements.forEach((el) => { el.style.pointerEvents = 'none'; });
+  confirmViewRefMarkers.forEach((m) => { if (m.parent) m.parent.remove(m); });
+  confirmViewRefMarkers = [];
+  commentPins.forEach((pin) => pin.mesh.scale.setScalar(1));
+  confirmViewButton.classList.remove('active');
+  confirmViewButton.style.display = '';
+  orientationAlignButton.disabled = false;
+  pointAlignButton.disabled = false;
+  positionToggleButton.disabled = false;
+  updateOrientationAlignBanner('');
+  if (confirmViewMarker) confirmViewMarker.visible = false;
+  commentPinButton.style.display = 'block';
+  commentLabelsToggle.style.display = 'block';
+  confirmViewBackButton.style.display = 'none';
+  teardownPointAlignBimView();
+  if (placedModel) placedModel.visible = true;
+}
+
+// モデル全体が収まる位置から、モデル中心を見る軌道カメラを用意する
+function initConfirmOrbit() {
+  if (!pointAlignCamera || !placedModel) return;
+  const box = new THREE.Box3().setFromObject(placedModel);
+  const size = box.getSize(new THREE.Vector3());
+  confirmOrbit.target.copy(box.getCenter(new THREE.Vector3()));
+  const aspect = window.innerWidth / window.innerHeight;
+  confirmOrbit.dist = Math.max(size.length() * 0.9, 3) / Math.min(1, aspect); // 縦画面は横幅が狭いので、その分遠くから見る
+  confirmOrbit.yaw = pointAlignYaw; // 今向いている方角から見る
+  confirmOrbit.pitch = 0.6;
+  pointAlignCamera.far = Math.max(500, confirmOrbit.dist * 10);
+  pointAlignCamera.updateProjectionMatrix();
+  applyConfirmOrbit();
+}
+
+function applyConfirmOrbit() {
+  if (!pointAlignCamera) return;
+  const o = confirmOrbit;
+  const cp = Math.cos(o.pitch);
+  pointAlignCamera.position.set(
+    o.target.x + Math.sin(o.yaw) * cp * o.dist,
+    o.target.y + Math.sin(o.pitch) * o.dist,
+    o.target.z + Math.cos(o.yaw) * cp * o.dist
+  );
+  pointAlignCamera.lookAt(o.target);
+}
+
+// 指1本のドラッグ: モデル中心の周りを回る
+function rotateConfirmOrbit(dxPx, dyPx) {
+  const ROTATE_SPEED = 0.006;
+  confirmOrbit.yaw -= dxPx * ROTATE_SPEED;
+  confirmOrbit.pitch += dyPx * ROTATE_SPEED;
+  confirmOrbit.pitch = Math.max(-1.4, Math.min(1.5, confirmOrbit.pitch));
+  applyConfirmOrbit();
+}
+
+// ピンチ: 中心との距離を変える
+function zoomConfirmOrbit(deltaPx) {
+  confirmOrbit.dist *= (1 - deltaPx * 0.004);
+  confirmOrbit.dist = Math.max(0.5, Math.min(300, confirmOrbit.dist));
+  applyConfirmOrbit();
+}
+
+// 指2本のドラッグ: 見ている中心を画面の左右・上下方向に平行移動する
+function panConfirmOrbit(dxPx, dyPx) {
+  if (!pointAlignCamera) return;
+  const k = confirmOrbit.dist * 0.0012;
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(pointAlignCamera.quaternion);
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(pointAlignCamera.quaternion);
+  confirmOrbit.target.addScaledVector(right, -dxPx * k);
+  confirmOrbit.target.addScaledVector(up, dyPx * k);
+  applyConfirmOrbit();
+}
+
+// ---- 確認ビューの左側コメント一覧(◀で開閉) ----
+function closeCvList() {
+  cvListPanel.style.display = 'none';
+  cvListTab.innerHTML = '◀<br>一覧';
+}
+function renderCvList() {
+  cvListPanel.innerHTML = '<h3>コメント一覧</h3>';
+  commentPins.forEach((pin) => {
+    pin.entries = normalizePinEntries(pin);
+    const entries = pin.entries;
+    const latest = entries[entries.length - 1];
+    const item = document.createElement('div');
+    item.className = 'cv-item';
+    const title = document.createElement('div');
+    title.className = 'cv-item-title';
+    title.textContent = latest ? latest.text : '';
+    item.appendChild(title);
+    const withImg = [...entries].reverse().find((e) => e.image);
+    if (withImg) {
+      const img = document.createElement('img');
+      img.src = withImg.image;
+      item.appendChild(img);
+    }
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'view';
+    viewBtn.textContent = '👁 ここを見る';
+    viewBtn.addEventListener('click', () => {
+      const wp = new THREE.Vector3();
+      pin.mesh.getWorldPosition(wp);
+      confirmOrbit.target.copy(wp);
+      confirmOrbit.dist = Math.min(confirmOrbit.dist, 3);
+      applyConfirmOrbit();
+      closeCvList();
+    });
+    item.appendChild(viewBtn);
+    const imgBtn = document.createElement('button');
+    imgBtn.className = 'img';
+    // 写真は、現場で書いた最新のコメントに紐づける(JSON取り込み分はロックされていて不可)
+    // ロック済み(JSON取り込み)のコメントでも、写真が未添付なら追加できる(文章は変更しない)
+    const lockedWithImage = latest && latest.locked && latest.image;
+    imgBtn.textContent = lockedWithImage ? '🔒 ロック済み' : (latest && latest.image ? '🖼 画像を変更' : '🖼 画像を追加');
+    imgBtn.disabled = !latest || lockedWithImage;
+    imgBtn.addEventListener('click', () => {
+      pinImageInput.value = '';
+      pinImageInput.onchange = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        downscaleImageFile(file, 800).then((dataUrl) => {
+          latest.image = dataUrl;
+          saveAppState();
+          renderCvList();
+        }).catch(() => {});
+      };
+      pinImageInput.click();
+    });
+    item.appendChild(imgBtn);
+    cvListPanel.appendChild(item);
+  });
+  if (commentPins.length === 0) {
+    const empty = document.createElement('div');
+    empty.textContent = 'コメントはまだありません';
+    cvListPanel.appendChild(empty);
+  }
+}
+cvListTab.addEventListener('click', () => {
+  if (cvListPanel.style.display === 'block') {
+    closeCvList();
+  } else {
+    renderCvList();
+    cvListPanel.style.display = 'block';
+    cvListTab.innerHTML = '▶<br>閉じる';
+  }
+});
+pointAlignCanvasWrap.addEventListener('pointerdown', () => {
+  if (cvListPanel.style.display === 'block') closeCvList();
+});
+
+function getActiveConfirmViewCamera() {
+  return pointAlignCamera;
+}
+
+confirmViewBackButton.addEventListener('click', () => {
+  cancelConfirmView();
+});
+
+// 毎フレーム呼ばれる。現在地マーカーを、実際のAR側カメラの現在位置・向きに追従させる
+// (このビュー用カメラ自体は手動操作なので、現在地は別途マーカーで示す必要がある。
+//  3D表示・平面図のどちらに切り替えていても、マーカー自体は常に最新の位置に動く)
+function updateConfirmViewFrame() {
+  if (!confirmViewActive || !confirmViewMarker) return;
+  const pos = new THREE.Vector3();
+  camera.getWorldPosition(pos);
+  confirmViewMarker.position.copy(pos);
+  const fwd = getCameraForwardXZ();
+  confirmViewMarker.rotation.y = Math.atan2(-fwd.x, -fwd.z);
+
+  // どの縮尺・距離でも、画面上で同じくらいの大きさ(縦の約1割)に見えるよう、
+  // 平面図では表示範囲に、3Dでは視点との距離に合わせて大きさを変える
+  let scale = 1;
+  if (pointAlignCamera) {
+    scale = Math.max(1, pointAlignCamera.position.distanceTo(pos) * 0.18);
+  }
+  confirmViewMarker.scale.setScalar(scale);
+
+  // 初期位置合わせに使ったBIM上の点(①②)も、同様に画面上で一定の大きさにする
+  const sizeInWorld = pointAlignCamera ? pointAlignCamera.position.distanceTo(pos) * 0.06 : 0.12;
+  confirmViewRefMarkers.forEach((m) => {
+    m.scale.setScalar(Math.max(0.12, sizeInWorld) / (currentScale || 1));
+  });
+
+  // コメントのピンも、遠くから見ても点として見える・タップできる大きさにする
+  if (pointAlignCamera) {
+    const wp = new THREE.Vector3();
+    commentPins.forEach((pin) => {
+      pin.mesh.getWorldPosition(wp);
+      const d = pointAlignCamera.position.distanceTo(wp);
+      pin.mesh.scale.setScalar(Math.max(1, (d * 0.03) / 0.025 / (currentScale || 1)));
+    });
+  }
+}
+
+// BIM専用ビュー内で、指1本の「タップ」(ドラッグせず離した)がコメントピンに
+// 当たっていれば、そのスレッドを閲覧専用で開く
+function handleConfirmViewTap(x, y) {
+  const activeCam = getActiveConfirmViewCamera();
+  if (!confirmViewActive || !activeCam || !placedModel) return;
+  const ndcX = (x / window.innerWidth) * 2 - 1;
+  const ndcY = -(y / window.innerHeight) * 2 + 1;
+  const raycasterPin = new THREE.Raycaster();
+  raycasterPin.setFromCamera(new THREE.Vector2(ndcX, ndcY), activeCam);
+  const pinMeshes = commentPins.map((p) => p.mesh);
+  const hits = pinMeshes.length > 0 ? raycasterPin.intersectObjects(pinMeshes, true) : [];
+  if (hits.length === 0) return;
+  const pin = commentPins.find((p) => p.mesh === hits[0].object);
+  if (pin) showPinThreadView(pin);
+}
+
+
+
+// ---- 高さ調整(立面図)のドラッグ操作 ----
+// 赤い基準線・カメラは画面上で固定したまま、黄色いハンドルのドラッグ量に
+// 応じてplacedModel.position.yを直接動かす(モデル側が画面内で上下する)。
+function setupElevationDrag() {
+  elevationDragHandle.addEventListener('pointerdown', (e) => {
+    if (!placedModel) return;
+    e.preventDefault();
+    elevationDragging = true;
+    elevationDragStartClientY = e.clientY;
+    elevationDragStartY = placedModel.position.y;
+    elevationDragHandle.setPointerCapture(e.pointerId);
+  });
+
+  elevationDragHandle.addEventListener('pointermove', (e) => {
+    if (!elevationDragging || !placedModel) return;
+    // 立面図カメラは上下±4mの範囲を画面いっぱいに表示しているので、
+    // その比率(画面の高さ ÷ 8m)でピクセル差分をメートルに変換する
+    const screenHeightPx = window.innerHeight;
+    const metersPerPixel = 8 / screenHeightPx;
+    const deltaPx = e.clientY - elevationDragStartClientY;
+    // 下にドラッグ(clientYが増える)するほどモデルが下がる(-)ようにする
+    const deltaMeters = -deltaPx * metersPerPixel;
+    placedModel.position.y = elevationDragStartY + deltaMeters;
+  });
+
+  const endDrag = (e) => {
+    if (!elevationDragging) return;
+    elevationDragging = false;
+    try { elevationDragHandle.releasePointerCapture(e.pointerId); } catch (err) { /* noop */ }
+  };
+  elevationDragHandle.addEventListener('pointerup', endDrag);
+  elevationDragHandle.addEventListener('pointercancel', endDrag);
+}
+
+// 通り芯の表示/非表示トグルの処理を設定する(太さスライダーは廃止)
+function setupGridLineControls() {
+  gridVisibleToggle.addEventListener('change', (e) => {
+    const visible = e.target.checked;
+    gridToggleChip.classList.toggle('checked', visible);
+    gridToggleCheck.style.display = visible ? '' : 'none';
+    if (gridLineObject) gridLineObject.visible = visible;
+    updateGridLabelsVisibility(visible);
+  });
+
+  edgeOutlineVisibleToggle.addEventListener('change', (e) => {
+    edgeOutlineFeatureEnabled = e.target.checked;
+    edgeOutlineToggleChip.classList.toggle('checked', edgeOutlineFeatureEnabled);
+    edgeOutlineToggleCheck.style.display = edgeOutlineFeatureEnabled ? '' : 'none';
+    // OFFにした場合は即座に全て隠し、ONにした場合は現在の透過状態に
+    // 応じて再表示させる(透過中の部分だけ、という仕様は変わらない)
+    if (placedModel) applyOpacity(placedModel, currentOpacity);
+  });
+}
+
+function setupOpacitySlider() {
+  opacitySlider.addEventListener('input', (e) => {
+    currentOpacity = Number(e.target.value) / 100;
+    opacityValueLabel.textContent = `${e.target.value}%`;
+    if (placedModel) {
+      applyOpacity(placedModel, currentOpacity);
+    }
+  });
+  opacityValueLabel.addEventListener('click', () => {
+    opacitySlider.value = 100;
+    currentOpacity = 1;
+    opacityValueLabel.textContent = '100%';
+    if (placedModel) {
+      applyOpacity(placedModel, currentOpacity);
+    }
+  });
+}
+
+// モデル内の全メッシュを調べ、使われている色ごとにグループ化する
+function buildColorGroups(root) {
+  colorGroups.clear();
+  root.traverse((child) => {
+    if (!child.isMesh || child.userData.isGridLineTube || child.userData.isEdgeOutline) return;
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+    materials.forEach((mat) => {
+      if (!mat || !mat.color) return;
+      const hex = mat.color.getHexString();
+      if (!colorGroups.has(hex)) {
+        colorGroups.set(hex, { materials: new Set(), enabled: true });
+      }
+      colorGroups.get(hex).materials.add(mat);
+      mat.userData.transparencyExcluded = false;
+    });
+  });
+}
+
+// 色チェックリストのUIを描画する(スウォッチ自体がボタンになっており、
+// ONのときチェックマークが浮かぶ「通り芯」チップと統一したデザイン)
+function renderColorFilterList() {
+  colorFilterList.innerHTML = '';
+  colorGroups.forEach((group, hex) => {
+    const label = document.createElement('label');
+    label.className = 'color-chip';
+    label.style.background = `#${hex}`;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = group.enabled;
+    checkbox.style.display = 'none';
+
+    const check = document.createElement('i');
+    check.className = 'color-chip-check';
+    check.textContent = '✓';
+    check.style.visibility = group.enabled ? 'visible' : 'hidden';
+
+    checkbox.addEventListener('change', () => {
+      group.enabled = checkbox.checked;
+      check.style.visibility = group.enabled ? 'visible' : 'hidden';
+      group.materials.forEach((mat) => {
+        mat.userData.transparencyExcluded = !group.enabled;
+      });
+      if (placedModel) {
+        applyOpacity(placedModel, currentOpacity);
+      }
+    });
+
+    label.appendChild(checkbox);
+    label.appendChild(check);
+    colorFilterList.appendChild(label);
+  });
+}
+
+// モデル内の全メッシュに透過設定を適用する。
+// ただし、色フィルターで除外(チェックOFF)された色は、常に不透明のまま維持する。
+function applyOpacity(object, opacity) {
+  object.traverse((child) => {
+    if (!child.isMesh || child.userData.isGridLineTube || child.userData.excludeFromOpacity || child.userData.isEdgeOutline) return;
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+    let isTransparentNow = false;
+    materials.forEach((mat) => {
+      if (!mat) return;
+      if (mat.userData.transparencyExcluded) {
+        mat.transparent = false;
+        mat.opacity = 1;
+      } else {
+        mat.transparent = opacity < 1;
+        mat.opacity = opacity;
+        if (opacity < 1) isTransparentNow = true;
+      }
+      mat.needsUpdate = true;
+    });
+    // 白い輪郭線は、輪郭ON/OFFトグルがONで、かつ実際に半透明になっている
+    // メッシュにだけ見せる(不透明なメッシュ、特に継手のような細かい形状に
+    // 付くと見づらいため)
+    if (child.userData.edgeOutline) {
+      child.userData.edgeOutline.visible = isTransparentNow && edgeOutlineFeatureEnabled;
+    }
+  });
+}
+
+function setupArControlButtons() {
+  bindHold('btn-fwd', () => moveRelative('forward'));
+  bindHold('btn-back', () => moveRelative('backward'));
+  bindHold('btn-left', () => moveRelative('left'));
+  bindHold('btn-right', () => moveRelative('right'));
+  bindHold('btn-up', () => moveHeight(HEIGHT_STEP));
+  bindHold('btn-down', () => moveHeight(-HEIGHT_STEP));
+  bindHold('btn-rot-left', () => rotateModel(-ROTATE_STEP_DEG));
+  bindHold('btn-rot-right', () => rotateModel(ROTATE_STEP_DEG));
+  bindHold('btn-rot-90', () => rotateModel(90));
+}
+
+// 現在のカメラ(スマホ)の向きを基準にした、水平方向の「前方」ベクトルを求める
+function getCameraForwardXZ() {
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y = 0;
+  dir.normalize();
+  return dir;
+}
+
+// 現在のカメラ(スマホ)の向きを基準にした、水平方向の「右方向」ベクトルを求める
+function getCameraRightXZ() {
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  right.y = 0;
+  right.normalize();
+  return right;
+}
+
+// 「前後左右」を、常にその時点でのスマホの向き基準で移動させる。
+// 位置決めモード中は、移動が遅く感じないよう1回あたりの移動量を3倍にする。
+function moveRelative(direction) {
+  if (!placedModel) return;
+
+  const forward = getCameraForwardXZ();
+  const right = getCameraRightXZ();
+  const step = positionSettingActive ? MOVE_STEP * 3 : MOVE_STEP;
+
+  switch (direction) {
+    case 'forward':
+      placedModel.position.addScaledVector(forward, step);
+      break;
+    case 'backward':
+      placedModel.position.addScaledVector(forward, -step);
+      break;
+    case 'right':
+      placedModel.position.addScaledVector(right, step);
+      break;
+    case 'left':
+      placedModel.position.addScaledVector(right, -step);
+      break;
+  }
+}
+
+// ボタンを押しっぱなしにすると、タップを連続で押したのと同じように繰り返し実行する。
+function bindHold(id, handler, delay = 350, interval = 120) {
+  const el = document.getElementById(id);
+  let timeoutId = null;
+  let intervalId = null;
+
+  function stop() {
+    clearTimeout(timeoutId);
+    clearInterval(intervalId);
+    timeoutId = null;
+    intervalId = null;
+  }
+
+  el.addEventListener('pointerdown', (e) => {
+    // メニューが隠れている間は、誤タッチ防止のため微調整ボタンを常にロックする
+    if (rightGroup.classList.contains('collapsed')) return;
+    e.preventDefault();
+    stop();
+    handler();
+    timeoutId = setTimeout(() => {
+      intervalId = setInterval(handler, interval);
+    }, delay);
+  });
+
+  el.addEventListener('pointerup', stop);
+  el.addEventListener('pointerleave', stop);
+  el.addEventListener('pointercancel', stop);
+}
+
+function moveHeight(dy) {
+  if (!placedModel) return;
+  placedModel.position.y += dy;
+}
+
+// 回転は常にモデル自身の中心(placedModelの原点)を軸に行われる
+function rotateModel(deg) {
+  if (!placedModel) return;
+  const currentDeg = THREE.MathUtils.radToDeg(placedModel.rotation.y);
+  const snappedDeg = Math.round((currentDeg + deg) / 5) * 5;
+  placedModel.rotation.y = THREE.MathUtils.degToRad(snappedDeg);
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  // BIM専用ビュー(現在地確認・点選択)が開いていれば、そちらも向きの変化に合わせる
+  if (pointAlignRenderer && pointAlignCamera) {
+    pointAlignRenderer.setSize(window.innerWidth, window.innerHeight, false);
+    pointAlignCamera.aspect = window.innerWidth / window.innerHeight;
+    pointAlignCamera.updateProjectionMatrix();
+  }
+}
+
+// ARセッション開始後、最初のフレームでカメラの正面にモデルを仮配置する
+function autoPlaceModel() {
+  alignRef = null;
+  placedModel = new THREE.Group();
+
+  modelMesh = bimModel.clone();
+  modelMesh.position.copy(originOffset).multiplyScalar(-1);
+  modelMesh.quaternion.identity();
+  placedModel.add(modelMesh);
+
+  // bimModel.clone()で複製されると、通り芯(GridLines)のオブジェクトも
+  // 別インスタンスとして複製される。実際に画面に描画されるのはこちら側
+  // (modelMesh配下)なので、表示/非表示トグルが効くよう参照を更新する。
+  // 輪郭線(edgeOutline)についても同様に、複製後のインスタンスを
+  // 各メッシュのuserDataに登録し直す(透過スライダー操作時の表示/非表示
+  // 切り替えが、複製後のモデルに対しても効くようにするため)。
+  // あわせて、「床壁で合わせる」機能のBIM側頂点スナップで使う、
+  // 全輪郭線分(頂点の一覧)もここで構築しておく。
+  modelEdgeSegments = [];
+  modelMesh.traverse((obj) => {
+    if (obj.name === 'GridLines') {
+      gridLineObject = obj;
+    }
+    if (obj.isMesh && !obj.userData.isEdgeOutline) {
+      const edgeChild = obj.children.find((c) => c.userData && c.userData.isEdgeOutline);
+      obj.userData.edgeOutline = edgeChild || null;
+      if (edgeChild) {
+        const posAttr = edgeChild.geometry.attributes.position;
+        for (let i = 0; i < posAttr.count; i += 2) {
+          modelEdgeSegments.push({
+            mesh: obj,
+            p1: new THREE.Vector3().fromBufferAttribute(posAttr, i),
+            p2: new THREE.Vector3().fromBufferAttribute(posAttr, i + 1),
+          });
+        }
+      }
+    }
+  });
+
+  scene.add(placedModel);
+
+  // 前回、キーボードや画像選択でセッションが切れる前に保存していた状態
+  // (位置合わせ結果・コメントピン)が、同じモデル(ファイル名+更新日時)で
+  // 残っていれば復元する。
+  let savedState = currentModelKey ? loadSavedAppState(currentModelKey) : null;
+  if (!savedState) {
+    // 完全一致が無い場合でも、「modelKeyを持たない古い形式の中間ファイル」を
+    // 読み込んだ直後(lastModifiedが分からずfileName::0で保存されているケース)
+    // だけは救済する。ここを単純な「ファイル名一致」にすると、同名だが
+    // 中身が違う新しいファイル(lastModifiedが異なる)を選んだ際に、
+    // 誤って古いコメント・位置を復元してしまうため、キーを厳密に絞る。
+    const legacyKey = `${selectedFileName}::0`;
+    const candidates = listAllSavedAppStates().filter(
+      (item) => item.modelKey === legacyKey
+    );
+    if (candidates.length === 1) {
+      savedState = candidates[0].state;
+      currentModelKey = candidates[0].modelKey;
+    }
+  }
+  if (savedState) {
+    applySavedAppState(savedState);
+    isResumedSession = true;
+  } else {
+    // 通常の自動配置: カメラの現在位置から、正面2m先を仮の配置場所にする
+    const cameraPos = new THREE.Vector3();
+    camera.getWorldPosition(cameraPos);
+    const forward = getCameraForwardXZ();
+
+    placedModel.position.copy(cameraPos).addScaledVector(forward, 2);
+    placedModel.scale.setScalar(currentScale);
+    applyOpacity(placedModel, currentOpacity);
+  }
+
+  // 「続きから再開」の場合は、保存済みの位置をそのまま使い、
+  // 位置決め(確定操作)を省略して通常のAR画面にそのまま入る
+  if (skipPositionSettingOnPlace) {
+    skipPositionSettingOnPlace = false;
+  } else {
+    // 配置したら、続けて位置合わせの方法を選んでもらう
+    // (①BIM位置合わせ(従来) ②エッジで合わせる)
+    alignMethodChoiceOverlay.style.display = 'flex';
+  }
+}
+
+function animate() {
+  renderer.setAnimationLoop(render);
+}
+
+function render(timestamp, frame) {
+  // モデルの読み込みは完了しているが、まだ配置していない場合、
+  // 最初に有効なフレームが来たタイミングで自動配置する
+  if (frame && bimModel && !placedModel) {
+    autoPlaceModel();
+  }
+
+  // 位置決め画面が開いている間は、上面図プレビューも毎フレーム描画する。
+  // (実際のモデルの位置・向き・大きさを、のっぺり表示用の複製に同期させてから描画する)
+  if (positionSettingActive && psRenderer && psCamera && psScene && placedModel && psPreviewModel) {
+    // 歩いて移動した分、上面図カメラの位置(パン)も毎フレーム追従させる。
+    // 向き(上面図の「上」方向)は開始時に固定したまま変えない(歩くたびに画面が回転すると酔うため)。
+    const liveCamPos = new THREE.Vector3();
+    camera.getWorldPosition(liveCamPos);
+    psCamera.position.set(liveCamPos.x, liveCamPos.y + 20, liveCamPos.z);
+    psCamera.lookAt(liveCamPos.x, liveCamPos.y, liveCamPos.z);
+
+    psPreviewModel.position.copy(placedModel.position);
+    psPreviewModel.quaternion.copy(placedModel.quaternion);
+    psPreviewModel.scale.copy(placedModel.scale);
+    syncPreviewOpacity(psPreviewModel);
+    psRenderer.render(psScene, psCamera);
+  }
+
+  // 高さ調整(立面図)画面が開いている間は、そちらも毎フレーム描画する。
+  // カメラ自体は固定したまま、モデル側だけを現在の高さに同期させることで、
+  // 「赤い基準線は動かず、モデルが上下する」見え方になる。
+  if (heightAlignmentActive && elevationRenderer && elevationCamera && elevationScene && placedModel && elevationPreviewModel) {
+    elevationPreviewModel.position.copy(placedModel.position);
+    elevationPreviewModel.quaternion.copy(placedModel.quaternion);
+    elevationPreviewModel.scale.copy(placedModel.scale);
+    syncPreviewOpacity(elevationPreviewModel);
+    elevationRenderer.render(elevationScene, elevationCamera);
+  }
+
+  // 「点で合わせる」「現在地・コメント確認」のBIM専用ビューが
+  // 開いている間は、そちらも毎フレーム描画する(両機能で同じビューを共用している)
+  if (pointAlignStep === 1 && pointAlignRenderer && pointAlignScene && pointAlignCamera) {
+    pointAlignRenderer.render(pointAlignScene, pointAlignCamera);
+  } else if (confirmViewActive && pointAlignRenderer && pointAlignScene) {
+    const activeCam = getActiveConfirmViewCamera();
+    if (activeCam) pointAlignRenderer.render(pointAlignScene, activeCam);
+  }
+
+  renderer.render(scene, camera);
+
+  // コメント一括表示ONの間、ラベル位置を毎フレーム更新する
+  updateCommentLabels();
+  updateGridLabels();
+  // 「2点合わせ」中、確定済みの1点目マーカーをカメラの動きに追従させる
+  updateOrientationAlignMarkers();
+  // 「点で合わせる」中、Depth Sensingのデータから実物側の点を毎フレーム計算する
+  updatePointAlignFrame(frame);
+  // 「現在地・コメント確認」中、現在地マーカーをカメラの現在位置に追従させる
+  updateConfirmViewFrame();
+}
+
+  </script>
+</body>
+</html>
