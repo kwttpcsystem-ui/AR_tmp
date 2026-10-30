@@ -197,13 +197,14 @@
     }
     #grid-toggle-row {
       display: flex;
-      gap: 8px;
+      flex-wrap: wrap;
+      gap: 4px;
     }
     .grid-chip {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 5px 10px;
+      gap: 2px;
+      padding: 4px 6px;
       border-radius: 4px;
       font-size: 11px;
       cursor: pointer;
@@ -278,14 +279,17 @@
     #point-align-button.active {
       background: #ff9800;
     }
-    #bim-viewer-open-button {
-      width: 220px;
+    #save-record-button,
+    #save-json-button {
+      width: 106px;
       height: 36px;
       border-radius: 8px;
       border: none;
       background: rgba(30,30,30,0.8);
       color: #fff;
       font-size: 12px;
+      padding: 0 4px;
+      white-space: nowrap;
       touch-action: none;
       user-select: none;
     }
@@ -862,7 +866,6 @@
     <button id="reset-button" aria-label="初期化してモデル選択に戻る">↺ 初期化</button>
     <button id="right-group-tab" aria-label="パネルの表示切替(左右両方)">メニュー</button>
   </div>
-  <button id="save-record-button" aria-label="コメントピンをBCFファイルとして保存" style="display:none;position:fixed;top:60px;right:14px;z-index:20;background:rgba(30,30,30,0.8);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;">💾 BCF保存</button>
   <button id="comment-pin-button" aria-label="コメント追加モードの切替">📍 コメント追加</button>
   <button id="comment-labels-toggle" aria-label="コメントの一括表示切替">💬 コメント表示</button>
   <button id="confirm-view-button" aria-label="現在地とコメントのピンをBIM専用ビューで確認する">📍 現在地・コメント確認</button>
@@ -1017,9 +1020,8 @@
       </button>
     </div>
     <div class="ctrl-row">
-      <button id="bim-viewer-open-button" aria-label="BIM表示アプリで全体を確認">
-        🌐 全体確認
-      </button>
+      <button id="save-record-button" aria-label="コメントピンをBCFファイルとして保存">💾 BCF保存</button>
+      <button id="save-json-button" aria-label="状態をJSONファイルとして保存">💾 JSON保存</button>
     </div>
   </div>
 
@@ -1076,6 +1078,11 @@
           <input type="checkbox" id="edge-outline-visible-toggle" checked style="display:none;" />
           <i class="grid-chip-check" id="edge-outline-toggle-check">✓</i>
           <span>輪郭</span>
+        </label>
+        <label id="ar-visible-toggle-chip" class="grid-chip checked">
+          <input type="checkbox" id="ar-visible-toggle" checked style="display:none;" />
+          <i class="grid-chip-check" id="ar-visible-toggle-check">✓</i>
+          <span>AR</span>
         </label>
       </div>
     </div>
@@ -1155,13 +1162,6 @@ const colorFilterList = document.getElementById('color-filter-list');
 const saveRecordButton = document.getElementById('save-record-button');
 const commentPinButton = document.getElementById('comment-pin-button');
 const commentLabelsToggle = document.getElementById('comment-labels-toggle');
-const bimViewerOpenButton = document.getElementById('bim-viewer-open-button');
-bimViewerOpenButton.addEventListener('click', () => {
-  // 同一オリジンなので、BIM表示アプリ側はlocalStorage/IndexedDBを直接読み取れる
-  // (新しいタブを開くだけで繋がる。同じ端末内で完結する場合、中間ファイルの
-  //  やり取り自体が不要なため、ここではダウンロードしない)。
-  window.open('bim-viewer.html', '_blank');
-});
 const commentLabelsContainer = document.getElementById('comment-labels-container');
 const imageLightboxOverlay = document.getElementById('image-lightbox-overlay');
 const imageLightboxImg = document.getElementById('image-lightbox-img');
@@ -1228,6 +1228,7 @@ const realignButton = document.getElementById('realign-button');
 let alignRef = null;
 let confirmViewRefMarkers = [];
 let confirmViewPrevLabelsVisible = false;
+let arModelVisible = true; // 「AR」チップ(BIMモデル本体の表示/非表示)
 let realignActive = false;
 const confirmViewButton = document.getElementById('confirm-view-button');
 const confirmViewBackButton = document.getElementById('confirm-view-back-button');
@@ -1806,6 +1807,17 @@ async function exportBCF() {
 
 saveRecordButton.addEventListener('click', () => {
   exportBCF();
+});
+
+// 現在の状態(位置合わせ・コメント・写真・モデル本体)をJSONファイルとして保存する
+document.getElementById('save-json-button').addEventListener('click', async () => {
+  const btn = document.getElementById('save-json-button');
+  if (!placedModel || !currentModelKey) return;
+  saveAppState();
+  const state = loadSavedAppState(currentModelKey);
+  if (!state) return;
+  flashButtonMessage(btn, '保存中…', 1500);
+  await downloadIntermediateFile(state);
 });
 
 // コメント追加モードのON/OFF切替
@@ -4322,7 +4334,7 @@ function cancelConfirmView() {
   confirmViewRefMarkers = [];
   commentPins.forEach((pin) => pin.mesh.scale.setScalar(1));
   confirmViewButton.classList.remove('active');
-  confirmViewButton.style.display = '';
+  confirmViewButton.style.display = 'block';
   orientationAlignButton.disabled = false;
   pointAlignButton.disabled = false;
   positionToggleButton.disabled = false;
@@ -4570,6 +4582,16 @@ function setupGridLineControls() {
     gridToggleCheck.style.display = visible ? '' : 'none';
     if (gridLineObject) gridLineObject.visible = visible;
     updateGridLabelsVisibility(visible);
+  });
+
+  // ARの表示/非表示(BIMモデル本体だけを隠す。コメントのピンや現在地確認はそのまま使える)
+  const arVisibleToggle = document.getElementById('ar-visible-toggle');
+  const arVisibleChip = document.getElementById('ar-visible-toggle-chip');
+  const arVisibleCheck = document.getElementById('ar-visible-toggle-check');
+  arVisibleToggle.addEventListener('change', (e) => {
+    arModelVisible = e.target.checked;
+    arVisibleChip.classList.toggle('checked', arModelVisible);
+    arVisibleCheck.style.display = arModelVisible ? '' : 'none';
   });
 
   edgeOutlineVisibleToggle.addEventListener('change', (e) => {
@@ -4916,6 +4938,11 @@ function render(timestamp, frame) {
     elevationPreviewModel.scale.copy(placedModel.scale);
     syncPreviewOpacity(elevationPreviewModel);
     elevationRenderer.render(elevationScene, elevationCamera);
+  }
+
+  // ARの表示/非表示。位置合わせ中・現在地確認中は、BIMが必要なので常に表示する
+  if (modelMesh) {
+    modelMesh.visible = arModelVisible || confirmViewActive || pointAlignStep === 1 || orientationAlignStep > 0 || positionSettingActive;
   }
 
   // 「点で合わせる」「現在地・コメント確認」のBIM専用ビューが
