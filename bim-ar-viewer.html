@@ -134,18 +134,6 @@
       font-size: 13px;
       white-space: nowrap;
     }
-    /* 縦画面(片手持ち)用のレイアウト調整 */
-    @media (orientation: portrait) {
-      #model-name-label { font-size: 13px; padding: 6px 10px; max-width: calc(100vw - 210px); }
-      #orientation-align-banner { top: 190px; max-width: 92vw; }
-      #ps-banner { top: 64px; max-width: 92vw; font-size: 12px; padding: 8px 12px; }
-      /* 縦画面: 左のパネルは画面の中央あたりから出して、右下のメニューと重ならないようにする */
-      #opacity-control { bottom: auto; top: 40%; }
-      #left-group-tab { bottom: auto; top: 44%; }
-      #slider-panel { width: 150px; max-height: 22vh; overflow-y: auto; }
-      #grid-toggle-row .grid-chip { font-size: 10px; gap: 1px; }
-      #cv-list-panel { width: 82vw; }
-    }
     #opacity-control {
       display: none;
       position: fixed;
@@ -875,6 +863,18 @@
       font-weight: bold;
       color: #fff;
       text-shadow: 0 0 2px rgba(0,0,0,0.7), 0 0 2px rgba(0,0,0,0.7);
+    }
+      /* 縦画面(片手持ち)用のレイアウト調整 */
+    @media (orientation: portrait) {
+      #model-name-label { font-size: 13px; padding: 6px 10px; max-width: calc(100vw - 210px); }
+      #orientation-align-banner { top: 190px; max-width: 92vw; }
+      #ps-banner { top: 64px; max-width: 92vw; font-size: 12px; padding: 8px 12px; }
+      /* 縦画面: 左のパネルは画面の中央あたりから出して、右下のメニューと重ならないようにする */
+      #opacity-control { bottom: auto; top: 40%; }
+      #left-group-tab { bottom: auto; top: 44%; }
+      #slider-panel { width: 150px; max-height: 22vh; overflow-y: auto; }
+      #grid-toggle-row .grid-chip { font-size: 10px; gap: 1px; }
+      #cv-list-panel { width: 82vw; }
     }
   </style>
   <script type="importmap">
