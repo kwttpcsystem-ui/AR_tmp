@@ -425,6 +425,25 @@
       height: 100%;
       display: block;
     }
+    #post-ar-overlay {
+      display: none; position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.92); color: #fff;
+      flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center;
+      padding: 24px; line-height: 1.7; font-size: 15px;
+    }
+    #post-ar-resume { background: #2e7d32; color: #fff; border: none; border-radius: 10px; padding: 14px 24px; font-size: 15px; }
+    #photo-assign-overlay {
+      display: none; position: fixed; inset: 0; z-index: 55; background: #1c1c1c; color: #fff;
+      flex-direction: column;
+    }
+    #photo-assign-header { display: flex; gap: 8px; padding: 10px; align-items: center; background: #111; }
+    #photo-assign-model { flex: 1; min-width: 0; padding: 8px; border-radius: 6px; background: #333; color: #fff; border: none; font-size: 13px; }
+    #photo-assign-close { background: #555; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+    #photo-assign-list { flex: 1; overflow-y: auto; padding: 10px; }
+    .pa-item { background: rgba(255,255,255,0.07); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+    .pa-item-text { font-size: 14px; margin-bottom: 6px; white-space: pre-wrap; word-break: break-word; }
+    .pa-item img { display: block; max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 6px; margin-bottom: 6px; }
+    .pa-item button { background: #6a1b9a; color: #fff; border: none; border-radius: 6px; padding: 8px 12px; font-size: 12px; }
+    .pa-item button:disabled { background: #555; }
     #cv-leader-svg { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; overflow: visible; z-index: 16; pointer-events: none; display: none; }
     #cv-list-tab {
       display: none; position: fixed; left: 0; top: 72%; transform: translateY(-50%); z-index: 19;
@@ -968,12 +987,24 @@
     </div>
   </div>
   <input type="file" id="pin-image-input" accept="image/*" style="display:none;" />
+  <div id="post-ar-overlay">
+    <div id="post-ar-text">写真を選んでいます。<br>選び終えたら、下のボタンでARを再開してください。</div>
+    <button id="post-ar-resume" type="button">▶ ARを再開(再合わせ)</button>
+  </div>
+  <div id="photo-assign-overlay">
+    <div id="photo-assign-header">
+      <select id="photo-assign-model"></select>
+      <button id="photo-assign-close" type="button">✕ 閉じる</button>
+    </div>
+    <div id="photo-assign-list"></div>
+  </div>
   <div id="file-picker">
     <label for="model-input" id="file-label">BIMモデル(.glb / .gltf)を選択</label>
     <input type="file" id="model-input" accept=".glb,.gltf" />
     <button id="manual-ar-start" style="display:none;margin-top:10px;padding:10px 20px;border-radius:8px;border:none;background:#ff9800;color:#fff;font-size:14px;">ARを開始(手動)</button>
     <div id="file-last-modified" style="margin-top:12px;font-size:11px;color:#888;"></div>
     <div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.15);padding-top:12px;">
+      <button id="photo-assign-open" type="button" style="background:#00897b;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:12px;margin-bottom:10px;">📷 コメントに写真を付ける</button><br>
       <label for="intermediate-file-input" id="intermediate-file-label" style="display:inline-block;background:#6a1b9a;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;">📂 JSONファイル(中間ファイル)を読み込む</label>
       <input type="file" id="intermediate-file-input" accept=".json" style="display:none;" />
     </div>
@@ -1234,6 +1265,8 @@ const realignButton = document.getElementById('realign-button');
 let alignRef = null;
 let confirmViewRefMarkers = [];
 let confirmViewPrevLabelsVisible = false;
+let photoPickPending = false; // 写真選択でARが終了することを見込んでいる間はtrue(ページを再読み込みしない)
+let arResumeAfterPhoto = false;
 let arModelVisible = true; // 「AR」チップ(BIMモデル本体の表示/非表示)
 let realignActive = false;
 const confirmViewButton = document.getElementById('confirm-view-button');
@@ -1535,6 +1568,99 @@ fileInput.addEventListener('change', (event) => {
 
   loadModelFile(file, modelKey, false);
 });
+
+
+// ---- 写真選択のあとのAR再開 ----
+const postArOverlay = document.getElementById('post-ar-overlay');
+const postArText = document.getElementById('post-ar-text');
+document.getElementById('post-ar-resume').addEventListener('click', () => {
+  postArOverlay.style.display = 'none';
+  arResumeAfterPhoto = true;
+  startARSession();
+});
+function notifyPhotoAttached() {
+  if (postArOverlay.style.display === 'flex') {
+    postArText.innerHTML = '写真を追加しました。<br>下のボタンでARを再開してください。';
+  }
+}
+// 写真選択の画面から戻ってもARが続いていた場合は、フラグを解除する
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && photoPickPending) {
+    setTimeout(() => {
+      if (renderer && renderer.xr.isPresenting) photoPickPending = false;
+    }, 1500);
+  }
+});
+
+// ---- AR開始前: コメントに写真をまとめて付ける画面 ----
+const photoAssignOverlay = document.getElementById('photo-assign-overlay');
+const photoAssignModelSelect = document.getElementById('photo-assign-model');
+const photoAssignList = document.getElementById('photo-assign-list');
+let photoAssignStates = [];
+document.getElementById('photo-assign-open').addEventListener('click', () => {
+  photoAssignStates = listAllSavedAppStates();
+  photoAssignModelSelect.innerHTML = '';
+  photoAssignStates.forEach((item, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = (item.state.fileName || item.modelKey).replace(/\.(glb|gltf)$/i, '');
+    photoAssignModelSelect.appendChild(opt);
+  });
+  photoAssignOverlay.style.display = 'flex';
+  renderPhotoAssignList();
+});
+document.getElementById('photo-assign-close').addEventListener('click', () => {
+  photoAssignOverlay.style.display = 'none';
+});
+photoAssignModelSelect.addEventListener('change', renderPhotoAssignList);
+
+function renderPhotoAssignList() {
+  photoAssignList.innerHTML = '';
+  const item = photoAssignStates[Number(photoAssignModelSelect.value)];
+  if (!item || !Array.isArray(item.state.commentPins) || item.state.commentPins.length === 0) {
+    photoAssignList.textContent = '保存されたコメントがありません。ARでコメントを付けてから使ってください。';
+    return;
+  }
+  item.state.commentPins.forEach((pinData) => {
+    pinData.entries = normalizePinEntries(pinData);
+    pinData.entries.forEach((entry) => {
+      const card = document.createElement('div');
+      card.className = 'pa-item';
+      const text = document.createElement('div');
+      text.className = 'pa-item-text';
+      text.textContent = entry.text || '(文字なし)';
+      card.appendChild(text);
+      if (entry.image) {
+        const img = document.createElement('img');
+        img.src = entry.image;
+        card.appendChild(img);
+      }
+      const lockedWithImage = entry.locked && entry.image;
+      const btn = document.createElement('button');
+      btn.textContent = lockedWithImage ? '🔒 ロック済み' : (entry.image ? '🖼 画像を変更' : '🖼 画像を追加');
+      btn.disabled = Boolean(lockedWithImage);
+      btn.addEventListener('click', () => {
+        pinImageInput.value = '';
+        pinImageInput.onchange = (event) => {
+          const file = event.target.files[0];
+          if (!file) return;
+          downscaleImageFile(file, 800).then((dataUrl) => {
+            entry.image = dataUrl;
+            try {
+              localStorage.setItem(appStateStorageKeyFor(item.modelKey), JSON.stringify(item.state));
+            } catch (err) {
+              alert('保存に失敗しました(容量不足の可能性があります)');
+            }
+            renderPhotoAssignList();
+          }).catch(() => {});
+        };
+        pinImageInput.click();
+      });
+      card.appendChild(btn);
+      photoAssignList.appendChild(card);
+    });
+  });
+}
 
 // GLB/GLTFファイルを実際に読み込む共通処理。
 // resumeがtrueの場合、保存済みの位置合わせ結果をそのまま使い、
@@ -2550,8 +2676,10 @@ function showPinThreadView(pin) {
           pin.entries[index].image = dataUrl;
           saveAppState();
           render();
+          notifyPhotoAttached();
         }).catch(() => {});
       };
+      photoPickPending = true;
       pinImageInput.click();
     });
   };
@@ -2969,11 +3097,30 @@ function init() {
       opacityControl.classList.add('collapsed');
     }
 
+    // 写真選択のあとARを再開した場合: 座標が新しくなっているので、位置を合わせ直す
+    if (arResumeAfterPhoto) {
+      arResumeAfterPhoto = false;
+      setTimeout(() => {
+        if (alignRef) startRealign();
+        else alignMethodChoiceOverlay.style.display = 'flex';
+      }, 600);
+    }
+
   });
 
   // ARが終了したら(Chrome標準の終了操作など)、ページを丸ごとリロードして
   // 最初の状態に戻す。初期化ボタンを押した場合と同じ結果になる。
   renderer.xr.addEventListener('sessionend', () => {
+    if (photoPickPending) {
+      // 写真選択のためにARが終了した場合は、ページを再読み込みせず、
+      // 選んだ写真を受け取ったあと「ARを再開」できるようにする
+      photoPickPending = false;
+      if (confirmViewActive) cancelConfirmView();
+      if (pointAlignStep > 0 || realignActive) cancelPointAlign();
+      postArText.innerHTML = '写真を選んでいます。<br>選び終えたら、下のボタンでARを再開してください。';
+      postArOverlay.style.display = 'flex';
+      return;
+    }
     location.reload();
   });
 
@@ -4467,8 +4614,10 @@ function renderCvList() {
           latest.image = dataUrl;
           saveAppState();
           renderCvList();
+          notifyPhotoAttached();
         }).catch(() => {});
       };
+      photoPickPending = true;
       pinImageInput.click();
     });
     item.appendChild(imgBtn);
