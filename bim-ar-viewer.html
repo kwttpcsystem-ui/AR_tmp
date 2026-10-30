@@ -2189,8 +2189,17 @@ function applySavedAppState(state) {
   }
 }
 
+// BIMモデル(と通り芯ラベル)を表示するか。「AR」がOFFでも、位置合わせ中・現在地確認中は表示する
+function isArModelShown() {
+  return arModelVisible || confirmViewActive || pointAlignStep === 1 || orientationAlignStep > 0 || positionSettingActive;
+}
+
 function updateGridLabels() {
   if (!placedModel || !modelMesh || gridLabelsData.length === 0 || !gridLabelsVisible) return;
+  if (!isArModelShown()) {
+    gridLabelElements.forEach((el) => { if (el) el.style.display = 'none'; });
+    return;
+  }
   const projCamera = (confirmViewActive && pointAlignCamera) ? pointAlignCamera : camera;
 
   const halfWidth = window.innerWidth / 2;
@@ -4948,7 +4957,7 @@ function render(timestamp, frame) {
 
   // ARの表示/非表示。位置合わせ中・現在地確認中は、BIMが必要なので常に表示する
   if (modelMesh) {
-    modelMesh.visible = arModelVisible || confirmViewActive || pointAlignStep === 1 || orientationAlignStep > 0 || positionSettingActive;
+    modelMesh.visible = isArModelShown();
   }
 
   // 「点で合わせる」「現在地・コメント確認」のBIM専用ビューが
