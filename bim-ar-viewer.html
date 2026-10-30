@@ -140,6 +140,7 @@
       #orientation-align-banner { top: 190px; max-width: 92vw; }
       #ps-banner { top: 64px; max-width: 92vw; font-size: 12px; padding: 8px 12px; }
       #slider-panel { width: 150px; }
+      #grid-toggle-row .grid-chip { font-size: 10px; gap: 1px; }
       #cv-list-panel { width: 82vw; }
     }
     #opacity-control {
@@ -197,8 +198,13 @@
     }
     #grid-toggle-row {
       display: flex;
-      flex-wrap: wrap;
       gap: 4px;
+    }
+    #grid-toggle-row .grid-chip {
+      flex: 1 1 0;
+      min-width: 0;
+      justify-content: center;
+      padding: 5px 2px;
     }
     .grid-chip {
       display: inline-flex;
