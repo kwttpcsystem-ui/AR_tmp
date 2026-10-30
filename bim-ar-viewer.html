@@ -416,18 +416,11 @@
       height: 100%;
       display: block;
     }
-    #pointer-button {
-      display: none; position: fixed; left: 14px; top: 180px; z-index: 20;
-      background: rgba(30,30,30,0.85); color: #fff; border: none; border-radius: 8px;
-      padding: 8px 12px; font-size: 12px; text-align: center;
-    }
-    #pointer-button.active { background: #e53935; }
-    #pointer-layer { display: none; position: fixed; inset: 0; z-index: 18; touch-action: none; }
     #pointer-ring {
       position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
       border: 6px solid #ff1744; background: rgba(255,23,68,0.18);
       box-shadow: 0 0 0 3px #fff, 0 0 16px 4px rgba(255,23,68,0.7);
-      opacity: 0; pointer-events: none;
+      opacity: 0; pointer-events: none; z-index: 30;
     }
     #post-ar-overlay {
       display: none; position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,0.92); color: #fff;
@@ -880,7 +873,7 @@
       /* 縦画面(片手持ち)用のレイアウト調整 */
     @media (orientation: portrait) {
       #model-name-label { font-size: 13px; padding: 6px 10px; max-width: calc(100vw - 210px); }
-      #orientation-align-banner { top: 230px; max-width: 92vw; }
+      #orientation-align-banner { top: 190px; max-width: 92vw; }
       #ps-banner { top: 64px; max-width: 92vw; font-size: 12px; padding: 8px 12px; }
       /* 縦画面: 左のパネルは画面の中央あたりから出して、右下のメニューと重ならないようにする */
       #opacity-control { bottom: auto; top: 40%; }
@@ -1003,8 +996,7 @@
     </div>
   </div>
   <input type="file" id="pin-image-input" accept="image/*" style="display:none;" />
-  <button id="pointer-button" aria-label="ポインタ(画面共有で場所を示す)">👆 ポインタ</button>
-  <div id="pointer-layer"><div id="pointer-ring"></div></div>
+  <div id="pointer-ring"></div>
   <div id="post-ar-overlay">
     <div id="post-ar-text">写真を選んでいます。<br>選び終えたら、下のボタンでARを再開してください。</div>
     <button id="post-ar-resume" type="button">▶ ARを再開(再合わせ)</button>
@@ -1590,45 +1582,66 @@ fileInput.addEventListener('change', (event) => {
 
 
 // ---- ポインタ(画面共有で「ここ!」と示す) ----
-// ONの間、画面を触っている指の少し上(指で隠れない位置)に赤い丸を出す。
-// BIMのある場所に限らず、画面の座標そのままで表示し、指を離すと少し残ってから消える。
-const pointerButton = document.getElementById('pointer-button');
-const pointerLayer = document.getElementById('pointer-layer');
+// 何もない場所を長押し(約0.5秒)すると、指の少し上(指で隠れない位置)に赤い丸が出る。
+// 押している間は指に付いてきて、離すと少し残ってから消える。BIMの有無に関係なく、画面の座標そのまま。
 const pointerRing = document.getElementById('pointer-ring');
 const POINTER_OFFSET_Y = 70; // 指の上にずらす量(px)
+const POINTER_HOLD_MS = 500;
+let pointerHoldTimer = null;
+let pointerPressId = null;
+let pointerShowing = false;
 let pointerFadeTimer = null;
-pointerButton.addEventListener('click', () => {
-  const on = pointerLayer.style.display !== 'block';
-  pointerLayer.style.display = on ? 'block' : 'none';
-  pointerButton.classList.toggle('active', on);
-  pointerButton.textContent = on ? '👆 ポインタ解除' : '👆 ポインタ';
-  if (!on) pointerRing.style.opacity = '0';
-});
-function movePointerRing(e) {
-  pointerRing.style.left = `${e.clientX}px`;
-  pointerRing.style.top = `${Math.max(32, e.clientY - POINTER_OFFSET_Y)}px`;
+let pointerStartX = 0, pointerStartY = 0;
+
+function pointerAllowedNow() {
+  // ピン追加・位置合わせ・位置決めなど、画面のタップやドラッグを使う操作の最中は出さない
+  return !commentModeActive && orientationAlignStep === 0 && pointAlignStep === 0 &&
+    !positionSettingActive && !heightAlignmentActive && cvListPanel.style.display !== 'block';
 }
-pointerLayer.addEventListener('pointerdown', (e) => {
-  if (!e.isPrimary) return;
+function isPointerTarget(t) {
+  if (!t) return false;
+  if (t === document.body || t === document.documentElement || t === renderer.domElement) return true;
+  return Boolean(t.closest && t.closest('#point-align-canvas-wrap'));
+}
+function movePointerRing(x, y) {
+  pointerRing.style.left = `${x}px`;
+  pointerRing.style.top = `${Math.max(32, y - POINTER_OFFSET_Y)}px`;
+}
+document.addEventListener('pointerdown', (e) => {
+  if (!e.isPrimary || !isPointerTarget(e.target) || !pointerAllowedNow()) return;
   clearTimeout(pointerFadeTimer);
-  pointerRing.style.transition = 'none';
-  pointerRing.style.opacity = '1';
-  movePointerRing(e);
-  pointerLayer.setPointerCapture(e.pointerId);
-});
-pointerLayer.addEventListener('pointermove', (e) => {
-  if (!e.isPrimary || pointerRing.style.opacity !== '1') return;
-  movePointerRing(e);
-});
-function endPointer(e) {
-  if (!e.isPrimary) return;
+  clearTimeout(pointerHoldTimer);
+  pointerPressId = e.pointerId;
+  pointerStartX = e.clientX;
+  pointerStartY = e.clientY;
+  pointerHoldTimer = setTimeout(() => {
+    pointerShowing = true;
+    pointerRing.style.transition = 'none';
+    pointerRing.style.opacity = '1';
+    movePointerRing(pointerStartX, pointerStartY);
+  }, POINTER_HOLD_MS);
+}, true);
+document.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== pointerPressId) return;
+  if (pointerShowing) {
+    movePointerRing(e.clientX, e.clientY);
+  } else if (Math.hypot(e.clientX - pointerStartX, e.clientY - pointerStartY) > 12) {
+    clearTimeout(pointerHoldTimer); // 動かした場合は、長押しではなく通常のドラッグ操作
+  }
+}, true);
+function endPointerHold(e) {
+  if (e.pointerId !== pointerPressId) return;
+  clearTimeout(pointerHoldTimer);
+  pointerPressId = null;
+  if (!pointerShowing) return;
+  pointerShowing = false;
   pointerFadeTimer = setTimeout(() => {
     pointerRing.style.transition = 'opacity 0.8s ease';
     pointerRing.style.opacity = '0';
   }, 800);
 }
-pointerLayer.addEventListener('pointerup', endPointer);
-pointerLayer.addEventListener('pointercancel', endPointer);
+document.addEventListener('pointerup', endPointerHold, true);
+document.addEventListener('pointercancel', endPointerHold, true);
 
 // ---- 写真選択のあとのAR再開 ----
 const postArOverlay = document.getElementById('post-ar-overlay');
@@ -3146,7 +3159,6 @@ function init() {
     commentPinButton.style.display = 'block';
     commentLabelsToggle.style.display = 'block';
     confirmViewButton.style.display = 'block';
-    pointerButton.style.display = 'block';
     positionToggleButton.textContent = '位置決め';
     positionToggleButton.classList.remove('active');
 
